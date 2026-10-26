@@ -1,11 +1,20 @@
 // Pedestrian entities for Voxel Coastal City.
 // createPedestrianEntities builds one mesh per pedestrian and route progress.
 // updatePedestrians advances walk loops and applies bobbing.
-import * as THREE from "three";
-import { CONSTANTS } from "../config/constants.js";
+import { createCharacter, animateCharacter } from "../world/characterModel.js";
 
 const DEFAULT_PED_COUNT = 8;
-const PED_COLORS = ["#f2c6a0", "#f7d4b0", "#d9a066", "#c9845a", "#f5e1c8", "#b6845c"];
+const PED_SKINS = [0xe0a878, 0xc98a5e, 0x8b5a3c, 0xf0c8a0, 0xb87a52, 0xd9a06c];
+const PED_OUTFITS = [
+  { shirt: "#f4f1e6", shorts: "#2b3a55", shoes: "#f0efe6", cap: null },
+  { shirt: "#f25c54", shorts: "#f4f1e6", shoes: "#3b7ddd", cap: "#f2c14e" },
+  { shirt: "#4cc9f0", shorts: "#2f7d55", shoes: "#f4f0df", cap: null },
+  { shirt: "#f7b267", shorts: "#6b4f3a", shoes: "#24211d", cap: "#e94f37" },
+  { shirt: "#9b5de5", shorts: "#2b3a55", shoes: "#f0efe6", cap: null },
+  { shirt: "#90be6d", shorts: "#4a3020", shoes: "#2ca8a0", cap: "#f2f0e8" },
+  { shirt: "#e8a0a0", shorts: "#f2f0e6", shoes: "#7a5230", cap: null },
+  { shirt: "#3b7ddd", shorts: "#24211d", shoes: "#f4f0df", cap: "#f7b267" }
+];
 
 function num(value, fallback = 0) {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
@@ -13,14 +22,6 @@ function num(value, fallback = 0) {
 
 function isFiniteNumber(v) {
   return typeof v === "number" && Number.isFinite(v);
-}
-
-function colorToThree(value, fallback = 0xb6845c) {
-  try {
-    return new THREE.Color(value == null ? fallback : value);
-  } catch (e) {
-    return new THREE.Color(fallback);
-  }
 }
 
 function fromRawPoint(raw) {
@@ -199,9 +200,6 @@ export function createPedestrianEntities(world, scene, options = {}) {
     total: routeLength(normalizeRoutePoints(r))
   }));
 
-  const width = num(opts.width, 0.7);
-  const height = num(opts.height, 1.7);
-
   // Distribute count across routes.
   const routeCount = finalRoutes.length;
   const base = Math.floor(count / routeCount);
@@ -229,16 +227,18 @@ export function createPedestrianEntities(world, scene, options = {}) {
       const x = located.x;
       const z = located.z;
 
-      const color = PED_COLORS[i % PED_COLORS.length];
-      const mesh = new THREE.Mesh(
-        new THREE.BoxGeometry(width, height, width * 0.8),
-        new THREE.MeshStandardMaterial({
-          color: colorToThree(color, 0xb6845c),
-          roughness: 0.85,
-          metalness: 0
-        })
-      );
-      mesh.position.set(x, height / 2, z);
+      const outfit = PED_OUTFITS[i % PED_OUTFITS.length];
+      const mesh = createCharacter({
+        name: `ped-${i + 1}`,
+        seed: i + 3,
+        skin: PED_SKINS[i % PED_SKINS.length],
+        shirt: outfit.shirt,
+        shorts: outfit.shorts,
+        shoes: outfit.shoes,
+        cap: outfit.cap,
+        scale: 0.88 + (i % 3) * 0.025
+      });
+      mesh.position.set(x, 0, z);
       mesh.rotation.y = yaw;
 
       if (scene && typeof scene.add === "function") {
@@ -256,9 +256,9 @@ export function createPedestrianEntities(world, scene, options = {}) {
         yaw,
         heading: yaw,
         speed,
-        color,
+        color: outfit.shirt,
         mesh,
-        meshHeight: height / 2,
+        meshHeight: 0,
         routeId: route.id,
         routeIndex: ri,
         route: route,
@@ -268,8 +268,9 @@ export function createPedestrianEntities(world, scene, options = {}) {
         routeProgress: progress,
         segmentIndex: located.segmentIndex,
         phase: i * 0.9,
+        animTime: i * 0.7,
         bob: 0,
-        bobAmplitude: 0.07,
+        bobAmplitude: 0.018,
         bobSpeed: 1.8 + (i % 4) * 0.2
       };
       entities.push(entity);
@@ -281,21 +282,28 @@ export function createPedestrianEntities(world, scene, options = {}) {
     // fallback one
     const route = finalRoutes[0];
     if (route) {
-      const mesh = new THREE.Mesh(
-        new THREE.BoxGeometry(width, height, width * 0.8),
-        new THREE.MeshStandardMaterial({ color: colorToThree(PED_COLORS[0], 0xb6845c), roughness: 0.85, metalness: 0 })
-      );
-      mesh.position.set(route.points[0].x, height / 2, route.points[0].z);
+      const outfit = PED_OUTFITS[0];
+      const mesh = createCharacter({
+        name: "ped-1",
+        seed: 3,
+        skin: PED_SKINS[0],
+        shirt: outfit.shirt,
+        shorts: outfit.shorts,
+        shoes: outfit.shoes,
+        cap: outfit.cap,
+        scale: 0.9
+      });
+      mesh.position.set(route.points[0].x, 0, route.points[0].z);
       if (scene && typeof scene.add === "function") try { scene.add(mesh); } catch (e) {}
       entities.push({
         id: "ped-1",
         type: "pedestrian",
         pedestrian: true,
         x: route.points[0].x, y: 0, z: route.points[0].z, yaw: 0, heading: 0,
-        speed: 1.1, color: PED_COLORS[0], mesh, meshHeight: height / 2,
+        speed: 1.1, color: outfit.shirt, mesh, meshHeight: 0,
         routeId: route.id, routeIndex: 0, route, routePoints: route.points,
         waypoints: route.points, path: route.points, routeProgress: 0, segmentIndex: 0,
-        phase: 0, bob: 0, bobAmplitude: 0.07, bobSpeed: 1.8
+        phase: 0, animTime: 0, bob: 0, bobAmplitude: 0.018, bobSpeed: 1.8
       });
     }
   }
@@ -355,9 +363,12 @@ export function updatePedestrians(peds, dt, options = {}) {
       }
     }
 
-    // bobbing
+    // Walk cycle and a tiny vertical bob.
     ped.phase += safeDt * ped.bobSpeed;
-    ped.bob = Math.sin(ped.phase) * ped.bobAmplitude;
+    ped.bob = Math.abs(Math.sin(ped.phase * 2)) * ped.bobAmplitude;
+    if (!Number.isFinite(ped.animTime)) ped.animTime = 0;
+    ped.animTime += safeDt;
+    animateCharacter(ped.mesh, ped.speed, ped.animTime);
 
     syncMesh(ped);
   }

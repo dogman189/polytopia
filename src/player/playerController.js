@@ -103,7 +103,10 @@ export function stepFoot(state, input, dt, world) {
 
   // Direct yaw assignment requested by mouse input.
   if (Object.prototype.hasOwnProperty.call(inputObj, "mouseYaw")) {
-    if (Number.isFinite(inputObj.mouseYaw)) state.yaw = inputObj.mouseYaw;
+    if (Number.isFinite(inputObj.mouseYaw)) {
+      const targetYaw = inputObj.mouseYaw;
+      state.yaw = targetYaw;
+    }
   } else if (Object.prototype.hasOwnProperty.call(inputObj, "yaw")) {
     if (Number.isFinite(inputObj.yaw)) state.yaw = inputObj.yaw;
   }
@@ -115,7 +118,7 @@ export function stepFoot(state, input, dt, world) {
   const leftInput = hasFlag(inputObj, ["left", "a", "KeyA", "ArrowLeft"]) ? 1 : 0;
   const rightInput = hasFlag(inputObj, ["right", "d", "KeyD", "ArrowRight"]) ? 1 : 0;
 
-  let strafe = rightInput - leftInput;
+  let strafe = leftInput - rightInput;
   let forward = forwardInput - backwardInput;
 
   if (inputObj.move && typeof inputObj.move === "object") {
@@ -151,6 +154,10 @@ export function stepFoot(state, input, dt, world) {
 
   velocity.x = approach(velocity.x, targetVx, maxDelta);
   velocity.z = approach(velocity.z, targetVz, maxDelta);
+  if (Math.hypot(velocity.x, velocity.z) < 0.04) {
+    velocity.x = 0;
+    velocity.z = 0;
+  }
 
   const radius = toFinite(PLAYER.RADIUS ?? PLAYER.COLLISION_RADIUS, 0.4);
   const boxes = worldBoxes(w);

@@ -4,3 +4,11 @@ dist/
 *.log
 .DS_Store
 Thumbs.db
+qa-*.png
+qa-*.txt
+qa-*.cjs
+qa-*.ps1
+qa-*.json
+*.py
+qa-original-sceneBuilder.js
+"

@@ -30,7 +30,7 @@ describe("createVehicle/stepVehicle", () => {
     const world = buildWorldData();
     const v = createVehicle({ x: 55, z: 24, yaw: 0 });
     stepVehicle(v, { throttle: true }, 1, world);
-    const radius = 2.2;
+    const radius = 1.3;
     expect(v.x).toBeLessThanOrEqual(world.bounds.maxX - radius + 1e-6);
     expect(v.z).toBeDefined();
   });
@@ -44,7 +44,7 @@ describe("createVehicle/stepVehicle", () => {
     const beforeZ = v.z;
     stepVehicle(v, { throttle: true }, 1, world);
     // Must not pass through the box (center z=4) plus vehicle radius.
-    expect(v.z).toBeLessThan(3 - 2.2 + 1e-6);
+    expect(v.z).toBeLessThan(3 - 1.3 + 1e-6);
     expect(v.z).toBeGreaterThanOrEqual(beforeZ - 1e-9);
   });
 });

@@ -76,11 +76,11 @@ export function buildWorldData() {
     })
   );
 
-  // Two rows of storefronts (11 per row).
-  const storeColumns = 11;
+  // Rows of storefronts across the expanded neighborhood.
+  const storeColumns = 17;
   const storeSpacing = 10;
-  const storeStartX = -50;
-  const storefrontRows = [14, 36];
+  const storeStartX = -80;
+  const storefrontRows = [16, 40, 64, 88];
   for (let row = 0; row < storefrontRows.length; row += 1) {
     for (let i = 0; i < storeColumns; i += 1) {
       const x = storeStartX + i * storeSpacing;
@@ -98,6 +98,37 @@ export function buildWorldData() {
       );
     }
   }
+
+  // Bigger catalog of varied building styles added across the city.
+  const catalogBuildings = [
+    // Residential apartments along the first avenue.
+    { id: "apt-1", type: "residential", x: -74, z: 18, w: 12, d: 9, h: 9, color: "#f3e7df" },
+    { id: "apt-2", type: "residential", x: -6, z: 18, w: 10, d: 8, h: 11, color: "#e8f0f0" },
+    { id: "apt-3", type: "residential", x: 58, z: 18, w: 11, d: 9, h: 10, color: "#f1e3d4" },
+    // Grand hotel and offices near the central plaza.
+    { id: "hotel-1", type: "hotel", x: -20, z: 62, w: 18, d: 12, h: 13, color: "#cfe1f0" },
+    { id: "office-tower-1", type: "tower", x: 46, z: 62, w: 16, d: 12, h: 16, color: "#ecf2f7" },
+    { id: "office-tower-2", type: "tower", x: 86, z: 62, w: 14, d: 11, h: 14, color: "#ecf2f7" },
+    { id: "library-1", type: "landmark", x: 12, z: 62, w: 20, d: 14, h: 6, color: "#fff3d6" },
+    // Heavy industry and warehouses near the back lots.
+    { id: "warehouse-1", type: "warehouse", x: -76, z: 90, w: 24, d: 14, h: 5, color: "#f6e2b6" },
+    { id: "warehouse-2", type: "warehouse", x: 52, z: 90, w: 26, d: 16, h: 6, color: "#f6e2b6" },
+    { id: "industry-stack-1", type: "utility", x: 84, z: 92, w: 6, d: 6, h: 14, color: "#c7d1d8" },
+    // Coastal housing and seaside plaza.
+    { id: "coast-house-1", type: "house", x: -88, z: 118, w: 8, d: 7, h: 4, color: "#f6d3c4" },
+    { id: "coast-house-2", type: "house", x: -58, z: 118, w: 8, d: 7, h: 4, color: "#ecf3e8" },
+    { id: "coast-house-3", type: "house", x: -28, z: 118, w: 9, d: 7, h: 5, color: "#f7e6d5" },
+    { id: "coast-house-4", type: "house", x:  2, z: 118, w: 9, d: 7, h: 5, color: "#e9e1f2" },
+    { id: "coast-house-5", type: "house", x:  32, z: 118, w: 8, d: 7, h: 4, color: "#f4e3c4" },
+    { id: "coast-house-6", type: "house", x:  62, z: 118, w: 8, d: 7, h: 4, color: "#ddeaf2" },
+    { id: "mall-1", type: "retail-mall", x: -30, z: 8, w: 40, d: 20, h: 5, color: "#f4e9d8" },
+    { id: "pavilion-1", type: "pavilion", x: 74, z: 8, w: 14, d: 14, h: 7, color: "#f5efe2" },
+  ];
+  catalogBuildings.forEach((spec, idx) => {
+    buildings.push(makeBuilding(spec.id, spec.type, spec.x, spec.z, spec.w, spec.d, spec.h, {
+      ...spec, name: spec.id, h: spec.h, w: spec.w, d: spec.d
+    }));
+  });
 
   // Collision boxes for every building plus the ocean retaining wall.
   const collisionBoxes = buildings.map(buildingBox);
@@ -150,25 +181,25 @@ export function buildWorldData() {
 
   // Traffic routes: 3 rectangular loops.
   const routePointsA = [
-    point(-55, 8),
-    point(55, 8),
-    point(55, 50),
-    point(-55, 50),
-    point(-55, 8)
+    point(-94, 10),
+    point(94, 10),
+    point(94, 100),
+    point(-94, 100),
+    point(-94, 10)
   ];
   const routePointsB = [
-    point(-55, 10),
-    point(55, 10),
-    point(55, 32),
-    point(-55, 32),
-    point(-55, 10)
+    point(-94, 16),
+    point(94, 16),
+    point(94, 60),
+    point(-94, 60),
+    point(-94, 16)
   ];
   const routePointsC = [
-    point(-20, 40),
-    point(25, 40),
-    point(25, 57),
-    point(-20, 57),
-    point(-20, 40)
+    point(-30, 46),
+    point(70, 46),
+    point(70, 94),
+    point(-30, 94),
+    point(-30, 46)
   ];
 
   const routeDefinitions = [
@@ -190,18 +221,18 @@ export function buildWorldData() {
 
   // Two pedestrian loops.
   const pedPointsA = [
-    point(-55, 8),
-    point(55, 8),
-    point(55, 46),
-    point(-55, 46),
-    point(-55, 8)
+    point(-90, 12),
+    point(90, 12),
+    point(90, 100),
+    point(-90, 100),
+    point(-90, 12)
   ];
   const pedPointsB = [
-    point(-55, 10),
-    point(55, 10),
-    point(55, 40),
-    point(-55, 40),
-    point(-55, 10)
+    point(-90, 30),
+    point(90, 30),
+    point(90, 86),
+    point(-90, 86),
+    point(-90, 30)
   ];
 
   const makePedRoute = (id, points) => {
@@ -216,14 +247,14 @@ export function buildWorldData() {
 
   // Cars: 8 parked (non-traffic) + 3 traffic cars appended.
   const parkedPositions = [
-    [-45, 6, 0],
-    [-15, 6, 0],
-    [15, 6, 0],
-    [45, 6, 0],
-    [-35, 28, Math.PI],
-    [-5, 28, Math.PI],
-    [25, 28, Math.PI],
-    [50, 28, Math.PI]
+    [-90, 6.3, Math.PI / 2],
+    [-30, 6.3, Math.PI / 2],
+    [30, 6.3, Math.PI / 2],
+    [90, 6.3, Math.PI / 2],
+    [-70, 32.3, -Math.PI / 2],
+    [-10, 32.3, -Math.PI / 2],
+    [50, 32.3, -Math.PI / 2],
+    [90, 80.3, -Math.PI / 2]
   ];
 
   const carColors = ["#d64045", "#3b7ddd", "#f2c14e", "#7a9e7e", "#9b5de5", "#f77f00", "#4cc9f0", "#90be6d"];
@@ -267,7 +298,7 @@ export function buildWorldData() {
     });
   });
 
-  const playerSpawn = { x: 0, z: 24, y: 0, yaw: 0 };
+  const playerSpawn = { x: 0, z: 36, y: 0, yaw: 0 };
 
   const spawns = {
     player: playerSpawn,

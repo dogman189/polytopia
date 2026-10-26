@@ -12,6 +12,8 @@ import { updateFollowCamera } from "./camera/followCamera.js";
 import { createKeyboardState } from "./input/keyboard.js";
 import { createMouseState } from "./input/mouse.js";
 import { resolveMovement } from "./world/collision.js";
+import { createCharacter, animateCharacter } from "./world/characterModel.js";
+import { updateHUD } from "./ui/hud.js";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { SSAOPass } from "three/addons/postprocessing/SSAOPass.js";
@@ -29,10 +31,12 @@ const camera = new THREE.PerspectiveCamera(cameraFov, window.innerWidth / Math.m
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 if (app) app.appendChild(renderer.domElement);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.08;
+renderer.toneMappingExposure = 1.05;
 
 const world = buildWorldData();
 const { group, buildingsGroup, ocean } = buildScene(scene, world, { renderer });
@@ -52,11 +56,17 @@ const player = {
   velocity: { x: 0, z: 0 }
 };
 
-const playerAvatar = new THREE.Mesh(
-  new THREE.BoxGeometry(0.8, 1.6, 0.6),
-  new THREE.MeshStandardMaterial({ color: 0x2a98c9, roughness: 0.75 })
-);
-playerAvatar.position.set(player.position.x, 0.8, player.position.z);
+const playerAvatar = createCharacter({
+  name: "player",
+  seed: 7,
+  skin: 0xd99a6c,
+  hair: 0x241711,
+  shirt: 0xf3f0e5,
+  shorts: 0x2f7d55,
+  shoes: 0x2ca8a0,
+  cap: 0xb23a2a
+});
+playerAvatar.position.set(player.position.x, 0, player.position.z);
 scene.add(playerAvatar);
 
 const PLAYER_RADIUS = (CONSTANTS && (CONSTANTS.PLAYER_RADIUS || (CONSTANTS.PLAYER && CONSTANTS.PLAYER.RADIUS))) || 0.4;
@@ -84,6 +94,7 @@ try {
 let activeVehicle = null;
 let transitionCooldown = 0;
 let eWas = false;
+let avatarTime = 0;
 
 function isEPressed(keyboardState) {
   return !!(keyboardState && keyboardState.isDown && keyboardState.isDown("KeyE"));
@@ -247,23 +258,33 @@ function frame(now) {
   // camera
   const cameraTarget = (gameMode === "driving" && activeVehicle) ? activeVehicle : player;
   updateFollowCamera(camera, cameraTarget, mouse, dt, {
-    distance: (CONSTANTS && CONSTANTS.CAMERA && CONSTANTS.CAMERA.DISTANCE) || 7,
-    height: (CONSTANTS && CONSTANTS.CAMERA && CONSTANTS.CAMERA.HEIGHT) || 3.5,
-    lookHeight: 1.2,
-    followSpeed: 8
+    distance: 6.4,
+    height: 2.95,
+    lookHeight: 1.25,
+    shoulder: -0.45,
+    followSpeed: 12
   });
 
-  // sync player avatar
+  // sync and animate the player avatar
   if (playerAvatar) {
     playerAvatar.position.x = player.position.x;
+    playerAvatar.position.y = 0;
     playerAvatar.position.z = player.position.z;
     playerAvatar.rotation.y = player.yaw;
     playerAvatar.visible = gameMode === "onFoot";
+    const footSpeed = gameMode === "onFoot" ? currentSpeed() : 0;
+    avatarTime += dt;
+    animateCharacter(playerAvatar, footSpeed, avatarTime);
   }
 
   if (composer) composer.render();
   else renderer.render(scene, camera);
   requestAnimationFrame(frame);
+}
+
+if (import.meta.env && import.meta.env.DEV && typeof window !== "undefined") {
+  // Development-only inspection handle used by visual QA tooling.
+  window.__voxelCity = { scene, camera, renderer, world, player, playerAvatar, cars, peds, mouse };
 }
 
 requestAnimationFrame(frame);

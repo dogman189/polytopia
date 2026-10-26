@@ -1,63 +1,51 @@
-// Mouse drag state for follow-camera yaw. Dragging starts on canvas mousedown,
-// updates on window mousemove, and releases on mouseup or window blur.
-
+// Mouse look using the Pointer Lock API: clicking the canvas locks the cursor,
+// and moving the mouse updates yaw/pitch continuously until ESC unlocks it.
+// When canvas is null (tests/SSR) falls back to a plain state object.
 export function createMouseState(canvas) {
   const state = {
     yaw: 0,
     pitch: 0,
     dragging: false,
-    sensitivity: 0.005,
-    pitchSensitivity: 0.005,
+    sensitivity: 0.0028,
+    pitchSensitivity: 0.0028,
     lastX: 0,
     lastY: 0,
     buttons: 0
   };
 
-  const target = canvas || (typeof window !== "undefined" ? window : null);
+  if (!canvas || typeof document === "undefined") return state;
 
-  function start(e) {
-    if (e && typeof e.button === "number" && e.button !== 0) return;
-    state.dragging = true;
-    state.lastX = (e && typeof e.clientX === "number") ? e.clientX : 0;
-    state.lastY = (e && typeof e.clientY === "number") ? e.clientY : 0;
-    state.buttons = (e && typeof e.buttons === "number") ? e.buttons : 1;
-    if (canvas && canvas.setPointerCapture && e && e.pointerId != null) {
-      try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+  function requestLock() {
+    if (document.pointerLockElement !== canvas) {
+      try { canvas.requestPointerLock(); } catch (e) { /* ignore */ }
     }
   }
 
-  function move(e) {
-    if (!state.dragging) return;
-    const x = (e && typeof e.clientX === "number") ? e.clientX : state.lastX;
-    const y = (e && typeof e.clientY === "number") ? e.clientY : state.lastY;
-    const dx = x - state.lastX;
-    const dy = y - state.lastY;
-    state.lastX = x;
-    state.lastY = y;
-    state.yaw += dx * state.sensitivity;
-    // pitch is inverted for natural feel; clamped by consumer if desired.
-    state.pitch += dy * state.pitchSensitivity;
+  function onPointerLockChange() {
+    state.dragging = document.pointerLockElement === canvas;
+    if (!state.dragging) {
+      state.buttons = 0;
+    }
   }
 
-  function end() {
+  function onPointerLockError() {
     state.dragging = false;
-    state.buttons = 0;
   }
 
-  function blur() {
-    // Never leave a drag stuck; keep accumulated yaw so camera does not snap.
-    state.dragging = false;
-    state.buttons = 0;
+  function onMove(e) {
+    if (document.pointerLockElement !== canvas) return;
+    state.yaw   -= (e.movementX || 0) * state.sensitivity;
+    state.pitch += (e.movementY || 0) * state.pitchSensitivity;
+    // Clamp pitch in the consumer-friendly range (no pointerlock helper here).
+    if (state.pitch < -1.2) state.pitch = -1.2;
+    if (state.pitch > 1.2) state.pitch = 1.2;
   }
 
-  if (target) {
-    target.addEventListener("mousedown", start);
-  }
-  if (typeof window !== "undefined") {
-    window.addEventListener("mousemove", move);
-    window.addEventListener("mouseup", end);
-    window.addEventListener("blur", blur);
-  }
+  // Clicking the canvas requests the lock (first click; subsequent clicks re-lock).
+  canvas.addEventListener("click", requestLock);
+  document.addEventListener("pointerlockchange", onPointerLockChange);
+  document.addEventListener("pointerlockerror", onPointerLockError);
+  document.addEventListener("mousemove", onMove);
 
   state.reset = function reset() {
     state.yaw = 0;
@@ -67,12 +55,11 @@ export function createMouseState(canvas) {
   };
 
   state.destroy = function destroy() {
-    if (target) target.removeEventListener("mousedown", start);
-    if (typeof window !== "undefined") {
-      window.removeEventListener("mousemove", move);
-      window.removeEventListener("mouseup", end);
-      window.removeEventListener("blur", blur);
-    }
+    try { document.exitPointerLock(); } catch (e) { /* ignore */ }
+    canvas.removeEventListener("click", requestLock);
+    document.removeEventListener("pointerlockchange", onPointerLockChange);
+    document.removeEventListener("pointerlockerror", onPointerLockError);
+    document.removeEventListener("mousemove", onMove);
   };
 
   return state;

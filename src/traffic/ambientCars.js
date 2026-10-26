@@ -1,8 +1,7 @@
 // Ambient car entities for Voxel Coastal City.
 // createCarEntities builds one mesh per car and exposes route metadata.
 // updateTraffic advances traffic cars along their routes and syncs meshes.
-import * as THREE from "three";
-import { CONSTANTS } from "../config/constants.js";
+import { createCarModel } from "../vehicles/carModel.js";
 
 function num(value, fallback = 0) {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
@@ -16,14 +15,6 @@ function trafficFlag(value) {
   if (value === true || value === 1) return true;
   if (typeof value === "string" && value.toLowerCase() === "true") return true;
   return false;
-}
-
-function colorToThree(value, fallback = 0x808080) {
-  try {
-    return new THREE.Color(value == null ? fallback : value);
-  } catch (e) {
-    return new THREE.Color(fallback);
-  }
 }
 
 function pointFrom(xLike, zLike) {
@@ -231,9 +222,6 @@ export function createCarEntities(world, scene, options = {}) {
 
   const opts = (options && typeof options === "object") ? options : {};
   const defaultSpeed = num(opts.trafficSpeed, 6);
-  const width = num(opts.width, 1.8);
-  const height = num(opts.height, 1.0);
-  const depth = num(opts.depth, 3.4);
 
   const specs = getCars(sourceWorld);
   const entities = [];
@@ -247,15 +235,11 @@ export function createCarEntities(world, scene, options = {}) {
     let speed = num(s.speed, traffic ? defaultSpeed : 0);
     if (traffic && !(speed > 0)) speed = defaultSpeed;
 
-    const mesh = new THREE.Mesh(
-      new THREE.BoxGeometry(width, height, depth),
-      new THREE.MeshStandardMaterial({
-        color: colorToThree(s.color, traffic ? 0x3b7ddd : 0xd64045),
-        roughness: 0.75,
-        metalness: 0.05
-      })
-    );
-    mesh.position.set(x, height / 2, z);
+    const mesh = createCarModel({
+      name: s.id != null ? String(s.id) : undefined,
+      color: typeof s.color === "string" ? s.color : (traffic ? "#3b7ddd" : "#d64045")
+    });
+    mesh.position.set(x, 0, z);
     mesh.rotation.y = yaw;
 
     if (scene && typeof scene.add === "function") {
@@ -303,7 +287,7 @@ export function createCarEntities(world, scene, options = {}) {
       finalX = located.x;
       finalZ = located.z;
       finalYaw = located.yaw;
-      mesh.position.set(finalX, height / 2, finalZ);
+      mesh.position.set(finalX, 0, finalZ);
       mesh.rotation.y = finalYaw;
     }
 

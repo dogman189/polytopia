@@ -3,15 +3,15 @@
 // Values are approximate tuning knobs; world-unit = 1 meter.
 
 const WORLD = Object.freeze({
-  MIN_X: -60,
-  MAX_X: 60,
+  MIN_X: -100,
+  MAX_X: 100,
   MIN_Z: -5,
-  MAX_Z: 65,
+  MAX_Z: 140,
   BLOCK_SIZE: 2,
   ROAD_WIDTH: 4,
   SIDEWALK_WIDTH: 2,
-  MAP_WIDTH: 120,
-  MAP_DEPTH: 70
+  MAP_WIDTH: 200,
+  MAP_DEPTH: 145
 });
 
 const PLAYER = Object.freeze({

@@ -20,7 +20,7 @@ const DEFAULTS = {
   MIN_TURN_SPEED: VEHICLE.MIN_TURN_SPEED ?? 0.5
 };
 
-const VEHICLE_RADIUS = 2.2;
+const VEHICLE_RADIUS = 1.3;
 
 const DEFAULT_BOUNDS = {
   minX: (WORLD && WORLD.MIN_X) ?? -60,
@@ -181,7 +181,7 @@ export function stepVehicle(vehicle, input, dt, world) {
   const left = hasFlag(inp, ["left", "steerLeft", "a", "arrowleft"]);
   const right = hasFlag(inp, ["right", "steerRight", "d", "arrowright"]);
 
-  let steerInput = right - left;
+  let steerInput = left - right;
   if (Number.isFinite(inp.steer)) steerInput += inp.steer;
   if (Number.isFinite(inp.steering)) steerInput += inp.steering;
   steerInput = clamp(steerInput, -1, 1);

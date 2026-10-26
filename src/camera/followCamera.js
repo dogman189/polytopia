@@ -70,15 +70,20 @@ export function updateFollowCamera(camera, target, mouseState, dt, options = {})
   const height = num(opts.height, num(C.HEIGHT, 3.5));
   const lookHeight = num(opts.lookHeight, 1.2);
   const followSpeed = Math.max(0.01, num(opts.followSpeed, 6));
+  const shoulder = num(opts.shoulder, -0.55);
 
   const cosPitch = Math.cos(pitch);
   const sinPitch = Math.sin(pitch);
   const horizontal = distance * cosPitch;
 
+  // The camera sits behind the facing direction (yaw 0 faces +Z), with a
+  // small lateral offset for an over-the-shoulder framing.
+  const rightX = Math.cos(yaw);
+  const rightZ = -Math.sin(yaw);
   const desired = {
-    x: t.x + Math.sin(yaw) * horizontal,
+    x: t.x - Math.sin(yaw) * horizontal + rightX * shoulder,
     y: t.y + height + distance * sinPitch,
-    z: t.z + Math.cos(yaw) * horizontal
+    z: t.z - Math.cos(yaw) * horizontal + rightZ * shoulder
   };
 
   if (safeDt > 0) {
