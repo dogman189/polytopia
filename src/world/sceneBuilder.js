@@ -1,155 +1,260 @@
-// Scene builder for Voxel Coastal City.
 import * as THREE from "three";
+import { makeTexture } from "./textures.js";
 
-function color(value, fallback = 0xffffff) {
-  try { return new THREE.Color(value); } catch (e) { return new THREE.Color(fallback); }
+const TEXTURE_CACHE = new Map();
+function tex(kind) {
+  if (!TEXTURE_CACHE.has(kind)) TEXTURE_CACHE.set(kind, makeTexture(kind));
+  return TEXTURE_CACHE.get(kind);
 }
 
-function num(v, fallback = 0) {
-  return typeof v === "number" && Number.isFinite(v) ? v : fallback;
+function voxelMaterial(kind, tintHex = 0xffffff, roughness = 0.85, metalness = 0.02, colorMix = null) {
+  const base = tex(kind);
+  let map = base;
+  const color = new THREE.Color(tintHex);
+  if (colorMix) color.lerp(new THREE.Color(colorMix), 0.45);
+
+  const material = new THREE.MeshStandardMaterial({
+    color,
+    roughness,
+    metalness,
+    map,
+    bumpMap: base,
+    bumpScale: 0.16,
+    normalScale: new THREE.Vector2(0.6, 0.6),
+    emissive: new THREE.Color(0x000000),
+    emissiveIntensity: 0,
+    envMapIntensity: 0.75
+  });
+  if (base) {
+    // StandardMaterial uses map UVs; no triplanar needed for regular box UVs.
+    material.map.repeat.set(base.userData?.repeat || 2, 2);
+  }
+  return material;
 }
 
-export function buildScene(scene, world = {}, options = {}) {
-  const { renderer } = options || {};
+function cube(w, h, d, material, x, y, z, cast = true, receive = true) {
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
+  mesh.castShadow = cast;
+  mesh.receiveShadow = receive;
+  mesh.position.set(x, y, z);
+  return mesh;
+}
 
-  if (renderer && renderer.shadowMap) renderer.shadowMap.enabled = false;
-  if (scene) scene.background = scene.background || new THREE.Color(0x87ceeb);
+export function buildScene(scene, world, opts) {
+  const { renderer } = opts || {};
+  const anisotropy = (renderer && typeof renderer.getCapabilities === "function")
+    ? Math.min(8, renderer.getCapabilities().maxAnisotropy || 8)
+    : 8;
 
   const group = new THREE.Group();
-  group.name = "city";
-  if (scene) scene.add(group);
+  scene.add(group);
 
-  const bounds = (world && world.bounds) || {};
-  const minX = num(bounds.minX, -60);
-  const maxX = num(bounds.maxX, 60);
-  const minZ = num(bounds.minZ, -5);
-  const maxZ = num(bounds.maxZ, 65);
+  // Enrich lighting.
+  const hemi = new THREE.HemisphereLight(0xbfe4ff, 0x5d7ea3, 0.56);
+  scene.add(hemi);
+  const ambient = new THREE.AmbientLight(0x253345, 0.26);
+  scene.add(ambient);
 
-  const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(140, 90),
-    new THREE.MeshStandardMaterial({ color: 0x7ec850, roughness: 0.95, metalness: 0 })
-  );
+  const sun = new THREE.DirectionalLight(0xfff0d6, 1.06);
+  sun.position.set(52, 64, 28);
+  sun.target.position.set(0, 0, 30);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.camera.near = 1;
+  sun.shadow.camera.far = 180;
+  sun.shadow.camera.left = -70;
+  sun.shadow.camera.right = 70;
+  sun.shadow.camera.top = 65;
+  sun.shadow.camera.bottom = -25;
+  sun.shadow.bias = -0.00007;
+  sun.shadow.normalBias = 0.01;
+  scene.add(sun);
+  scene.add(sun.target);
+
+  // Sky fill via background gradient. Uses scene.background to avoid duplicate sky clutter.
+  if (!scene.background) {
+    scene.background = new THREE.Color(0x92c7ea);
+  }
+
+  // Ground beach/sand/dirt transition.
+  const groundMat = new THREE.MeshStandardMaterial({
+    color: 0xdec8aa,
+    roughness: 0.95,
+    metalness: 0.02,
+    map: tex("sand"),
+    receivingShadowPlane: false
+  });
+  groundMat.map.repeat.set(18, 10);
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(140, 90), groundMat);
   ground.rotation.x = -Math.PI / 2;
-  ground.position.set(0, 0, 30);
+  ground.position.set(0, -0.01, 30);
+  ground.castShadow = false;
+  ground.receiveShadow = true;
   group.add(ground);
 
-  const oceanData = (world && world.ocean) || {};
-  const oceanMinX = num(oceanData.minX, minX);
-  const oceanMaxX = num(oceanData.maxX, maxX);
-  const oceanMinZ = num(oceanData.minZ, 60);
-  const oceanMaxZ = num(oceanData.maxZ, maxZ);
-  const oceanWidth = Math.max(10, oceanMaxX - oceanMinX + 4);
-  const oceanDepth = Math.max(10, oceanMaxZ - oceanMinZ + 20);
-  const oceanCenterX = (oceanMinX + oceanMaxX) / 2;
-  const oceanCenterZ = (oceanMinZ + oceanMaxZ) / 2 + 10;
-  const ocean = new THREE.Mesh(
-    new THREE.PlaneGeometry(oceanWidth, oceanDepth),
-    new THREE.MeshStandardMaterial({ color: 0x3a8ee6, roughness: 0.4, metalness: 0.1 })
-  );
+  // Ocean with slight depth and specular reflection feel.
+  const oceanMaterial = new THREE.MeshStandardMaterial({
+    color: 0x1f7fb8,
+    roughness: 0.24,
+    metalness: 0.05,
+    map: tex("glass"),
+    emissive: new THREE.Color(0x1a6fa5),
+    emissiveIntensity: 0.08
+  });
+  oceanMaterial.map.repeat.set(30, 8);
+
+  const ocean = new THREE.Mesh(new THREE.PlaneGeometry(140, 50), oceanMaterial);
   ocean.rotation.x = -Math.PI / 2;
-  ocean.position.set(oceanCenterX, num(oceanData.level ?? oceanData.waterLevel, 0) - 0.05, oceanCenterZ);
+  ocean.position.set(0, -0.1, -15);
+  ocean.receiveShadow = false;
+  ocean.castShadow = false;
   group.add(ocean);
 
-  const oceanWall = oceanData.wall || {};
-  const wallMinX = num(oceanWall.minX, oceanMinX);
-  const wallMaxX = num(oceanWall.maxX, oceanMaxX);
-  const wallMinZ = num(oceanWall.minZ, 60);
-  const wallMaxZ = num(oceanWall.maxZ, 62);
-  const retainingWall = new THREE.Mesh(
-    new THREE.BoxGeometry(Math.max(1, wallMaxX - wallMinX), 1.4, Math.max(0.5, wallMaxZ - wallMinZ)),
-    new THREE.MeshStandardMaterial({ color: 0x8a857a, roughness: 0.9, metalness: 0 })
-  );
-  retainingWall.position.set((wallMinX + wallMaxX) / 2, 0.7, (wallMinZ + wallMaxZ) / 2);
-  group.add(retainingWall);
+  // Retaining wall blends with stone texture.
+  const wall = cube(120, 1.2, 1, voxelMaterial("stone", 0x898378, 0.92), 0, 0.6, -4.5, true, true);
+  group.add(wall);
 
+  // Buildings with better facade detail.
   const buildingsGroup = new THREE.Group();
-  buildingsGroup.name = "buildings";
   group.add(buildingsGroup);
 
-  const roofMat = new THREE.MeshStandardMaterial({ color: 0x8b5a3c, roughness: 0.9, metalness: 0 });
-  const buildings = Array.isArray(world && world.buildings) ? world.buildings : [];
-  for (const b of buildings) {
-    const w = num(b.w ?? b.width, 2);
-    const d = num(b.d ?? b.depth, 2);
-    const h = num(b.h ?? b.height, 2);
-    const cx = num(b.x, 0);
-    const cz = num(b.z, 0);
-    const rotY = num(b.rotation, 0);
+  (world.buildings || []).forEach((b) => {
+    const w = Math.max(2, b.w || 2);
+    const d = Math.max(2, b.d || d.w ? b.d : 2);
+    const h = Math.max(2, b.h || 2);
+    const wallMat = voxelMaterial("wall", b.color || 0xf0e0d0, 0.88, 0.02, 0xd4c2a8);
+    base.buildingFacadelight = 0;
 
-    const buildingGroup = new THREE.Group();
-    buildingGroup.name = b.id || "building";
+    const baseBody = cube(w, h, d, wallMat, b.x, 0, b.z, true, true);
+    buildingsGroup.add(baseBody);
 
-    const base = new THREE.Mesh(
-      new THREE.BoxGeometry(w, h, d),
-      new THREE.MeshStandardMaterial({ color: color(b.color, 0xd9d3c7), roughness: 0.9, metalness: 0 })
-    );
-    base.position.set(0, h / 2, 0);
-    buildingGroup.add(base);
+    // Rooftop with terracotta texture.
+    const roofMat = voxelMaterial("roof", 0xb9543c, 0.78, 0.01, 0x7a2f20);
+    const roof = cube(w + 0.2, 0.7, d + 0.2, roofMat, b.x, h, b.z, true, true);
+    buildingsGroup.add(roof);
 
-    const roof = new THREE.Mesh(new THREE.BoxGeometry(w + 0.4, 0.25, d + 0.4), roofMat);
-    roof.position.set(0, h + 0.125, 0);
-    buildingGroup.add(roof);
-
-    const awning = new THREE.Mesh(
-      new THREE.BoxGeometry(w, 0.15, 0.6),
-      new THREE.MeshStandardMaterial({ color: 0xe8a87c, roughness: 0.8, metalness: 0 })
-    );
-    awning.position.set(0, Math.max(0.4, h * 0.35), d / 2 + 0.3);
-    buildingGroup.add(awning);
-
-    buildingGroup.position.set(cx, 0, cz);
-    if (rotY) buildingGroup.rotation.y = rotY;
-
-    buildingsGroup.add(buildingGroup);
-  }
-
-  const props = Array.isArray(world && world.props) ? world.props : [];
-  for (const p of props) {
-    if (p.type && p.type !== "palm") continue;
-    const height = num(p.height, 4);
-    const radius = num(p.radius, 0.6);
-    const px = num(p.x, 0);
-    const pz = num(p.z, 0);
-
-    const palmGroup = new THREE.Group();
-    palmGroup.name = p.id || "palm";
-
-    const trunk = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.12, 0.22, height, 8),
-      new THREE.MeshStandardMaterial({ color: 0x8b5a2b, roughness: 0.9, metalness: 0 })
-    );
-    trunk.position.set(0, height / 2, 0);
-    palmGroup.add(trunk);
-
-    const crown = new THREE.Mesh(
-      new THREE.ConeGeometry(radius * 1.6, 1.4, 6),
-      new THREE.MeshStandardMaterial({ color: 0x3fa34d, roughness: 0.85, metalness: 0 })
-    );
-    crown.position.set(0, height + 0.7, 0);
-    palmGroup.add(crown);
-
-    for (let i = 0; i < 4; i++) {
-      const frond = new THREE.Mesh(
-        new THREE.BoxGeometry(radius * 2.4, 0.15, 0.4),
-        new THREE.MeshStandardMaterial({ color: 0x2f8f46, roughness: 0.85, metalness: 0 })
-      );
-      frond.position.set(0, height + 0.4, 0);
-      frond.rotation.y = (i * Math.PI) / 2;
-      frond.rotation.z = 0.2;
-      palmGroup.add(frond);
+    // Awning.
+    if (h > 3) {
+      const awningMat = voxelMaterial("roof", 0xc76a50, 0.72, 0, 0x9a3a22);
+      const awning = cube(Math.max(1, w - 1), 0.2, Math.max(1, d - 1), awningMat, b.x, Math.min(h, 3) + 0.2, b.z + Math.max(1, d * 0.35), true, true);
+      buildingsGroup.add(awning);
     }
 
-    palmGroup.position.set(px, 0, pz);
-    group.add(palmGroup);
+    // Windows around building.
+    const glassMat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(0x2f5d7c),
+      roughness: 0.18,
+      metalness: 0.05,
+      map: tex("glass"),
+      emissive: new THREE.Color(0x193048),
+      emissiveIntensity: 0.18
+    });
+
+    const rows = Math.max(1, Math.floor(h / 3));
+    const cols = Math.max(1, Math.floor(w / 2.6));
+    const depthSide = Math.max(1, Math.floor(d / 2.6));
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const x = b.x - w / 2 + 1.3 + c * 2.6;
+        const y = 1.8 + r * 2.8;
+        if (y < h - 0.5) {
+          // front + back windows
+          buildingsGroup.add(cube(0.8, 0.9, 0.06, glassMat, x, y, b.z + d / 2 + 0.04));
+          buildingsGroup.add(cube(0.8, 0.9, 0.06, glassMat, x, y, b.z - d / 2 - 0.04));
+        }
+      }
+      // side windows
+      for (let c = 0; c < depthSide; c++) {
+        const z = b.z - d / 2 + 1.3 + c * 2.6;
+        const y = 1.8 + r * 2.8;
+        if (y < h - 0.5) {
+          const x = b.x + w / 2 + 0.04;
+          buildingsGroup.add(cube(0.06, 0.9, 0.8, glassMat, x, y, z));
+        }
+      }
+    }
+
+    // Point light in a handful of townhall/fuel shop entrances.
+    if (b.type === "landmark" && h >= 4) {
+      const pl = new THREE.PointLight(0xffdc9f, 0.8, 22, 2);
+      pl.position.set(b.x, 3, b.z + d * 0.4 + 1.2);
+      pl.castShadow = true;
+      pl.shadow.mapSize.set(512, 512);
+      scene.add(pl);
+    }
+  });
+
+  // props - improve palms and street lamps
+  const trunkMat = voucher("wood");
+  const frondMat = voucher("grass");
+
+  // We need import? no, keep existing function name typo intentionally? use local.
+  // palms fallback simple
+  (world.props || []).forEach((p) => {
+    const x = (Number.isFinite(p.x) ? p.x : 0);
+    const z = (Number.isFinite(p.z) ? p.z : 0);
+    const s = p.scale || 1;
+    const trunk = cube(0.4 * s, 4 * s, 0.4 * s, materialsLike("wood", 0x7a5230), x, 2 * s, z, true, true);
+    buildingsGroup.add(trunk);
+    const crown = new THREE.Mesh(new THREE.SphereGeometry(1.2 * s, 10, 8), voucherLike("grass", 0x4f8f36));
+    crown.position.set(x, 5.2 * s, z);
+    crown.castShadow = true;
+    crown.receiveShadow = true;
+    buildingsGroup.add(crown);
+  });
+
+  // street lamps every 8 on the coast
+  for (let i = -7; i <= 7; i++) {
+    const x = i * 9 + (i % 2) * 1;
+    const z = -4.2;
+    const pole = cube(0.12, 4, 0.12, materialsLike("generic", 0x464a50), x, 2, z, true, true);
+    buildingsGroup.add(pole);
+    const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.26, 8, 6), new THREE.MeshStandardMaterial({ color: 0xfff3cf, emissive: 0xffd07a, emissiveIntensity: 0.85, roughness: 0.25 }));
+    lamp.position.set(x, 4.1, z);
+    buildingsGroup.add(lamp);
+    const point = new THREE.PointLight(0xffdc8c, 0.6, 16, 2);
+    point.position.set(x, 4.1, z);
+    point.castShadow = true;
+    scene.add(point);
   }
 
-  const hemi = new THREE.HemisphereLight(0x87ceeb, 0x7ec850, 0.7);
-  const sun = new THREE.DirectionalLight(0xffffff, 0.9);
-  sun.position.set(50, 80, 30);
-  if (scene) { scene.add(hemi); scene.add(sun); }
-  else { group.add(hemi); group.add(sun); }
+  // materials fields (will be filled below)
+  const materials = {
+    ground: groundMat,
+    ocean: oceanMaterial,
+    wall,
+    sun,
+    hemi
+  };
 
-  return { group, buildingsGroup, ocean };
+  // helper functions bound after declaration to avoid TDZ.
+  // fill caches for vertex bump anisotropy
+  if (renderer && renderer.getCapabilities) {
+    for (const [k, t] of TEXTURE_CACHE.entries()) {
+      if (t && Number.isFinite(anisotropy)) t.anisotropy = anisotropy;
+    }
+  }
+
+  const lights = {
+    hemi,
+    ambient,
+    sun
+    // point lights already added to scene
+  };
+
+  return { group, buildingsGroup, ocean, ground, wall, lights, materials };
 }
 
-export default buildScene;
+// --- helper aliases (hoisted function declarations) ---
+function voucher(kind) {
+  // fallback mapper if we forget alias; not used in main path.
+  return new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, map: tex(kind) });
+}
+
+function voucherLike(kind, tint) {
+  return new THREE.MeshStandardMaterial({ color: tint, roughness: 0.85, map: tex(kind) });
+}
+
+function materialsLike(kind, tint) {
+  return new THREE.MeshStandardMaterial({ color: tint, roughness: 0.85, metalness: 0.03, map: tex(kind) });
+}
