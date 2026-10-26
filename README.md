@@ -1,4 +1,4 @@
-# Voxel Coastal City
+# Polytopia (Voxel Coastal City)
 
 A browser-based voxel 3D demo about walking, driving, and exploring a chunky
 tropical coastal city. Built with **Vite** + **Three.js**.
