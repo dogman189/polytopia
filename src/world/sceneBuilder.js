@@ -149,7 +149,7 @@ export function buildScene(scene, world = {}, options = {}) {
   if (scene) { scene.add(hemi); scene.add(sun); }
   else { group.add(hemi); group.add(sun); }
 
-  return { group, buildingsGroup, ocean, ground, retainingWall };
+  return { group, buildingsGroup, ocean };
 }
 
 export default buildScene;

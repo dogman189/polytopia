@@ -34,10 +34,7 @@ function onResize() {
 }
 window.addEventListener('resize', onResize);
 
-let last = performance.now();
-function animate(now) {
-  const dt = (now - last) / 1000;
-  last = now;
+function animate() {
   renderer.render(scene, camera);
   requestAnimationFrame(animate);
 }
