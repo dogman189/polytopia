@@ -46,6 +46,13 @@ const player = {
   velocity: { x: 0, z: 0 }
 };
 
+const playerAvatar = new THREE.Mesh(
+  new THREE.BoxGeometry(0.8, 1.6, 0.6),
+  new THREE.MeshStandardMaterial({ color: 0x2a98c9, roughness: 0.75 })
+);
+playerAvatar.position.set(player.position.x, 0.8, player.position.z);
+scene.add(playerAvatar);
+
 const PLAYER_RADIUS = (CONSTANTS && (CONSTANTS.PLAYER_RADIUS || (CONSTANTS.PLAYER && CONSTANTS.PLAYER.RADIUS))) || 0.4;
 
 let gameMode = "onFoot"; // 'onFoot' | 'driving'
@@ -127,6 +134,8 @@ function frame(now) {
             gameMode = "driving";
             activeVehicle = vehicle;
             vehicle.stolen = true;
+            vehicle.speed = 0;
+            if (vehicle.velocity) { vehicle.velocity.x = 0; vehicle.velocity.z = 0; }
             player.velocity.x = 0;
             player.velocity.z = 0;
             transitionCooldown = 0.3;
@@ -149,6 +158,10 @@ function frame(now) {
         player.yaw = Number.isFinite(vehicle.yaw) ? vehicle.yaw : player.yaw;
         player.velocity.x = 0;
         player.velocity.z = 0;
+        if (vehicle.speed !== undefined) { vehicle.speed = 0; }
+        if (vehicle.velocity) { vehicle.velocity.x = 0; vehicle.velocity.z = 0; }
+        vehicle.parked = true;
+        vehicle.idling = true;
         activeVehicle = null;
         gameMode = "onFoot";
         transitionCooldown = 0.3;
@@ -212,6 +225,14 @@ function frame(now) {
     lookHeight: 1.2,
     followSpeed: 8
   });
+
+  // sync player avatar
+  if (playerAvatar) {
+    playerAvatar.position.x = player.position.x;
+    playerAvatar.position.z = player.position.z;
+    playerAvatar.rotation.y = player.yaw;
+    playerAvatar.visible = gameMode === "onFoot";
+  }
 
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
