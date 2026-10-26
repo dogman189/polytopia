@@ -81,8 +81,7 @@ export function buildScene(scene, world, opts) {
     color: 0xdec8aa,
     roughness: 0.95,
     metalness: 0.02,
-    map: tex("sand"),
-    receivingShadowPlane: false
+    map: tex("sand")
   });
   groundMat.map.repeat.set(18, 10);
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(140, 90), groundMat);
@@ -123,8 +122,6 @@ export function buildScene(scene, world, opts) {
     const d = Math.max(2, b.d || d.w ? b.d : 2);
     const h = Math.max(2, b.h || 2);
     const wallMat = voxelMaterial("wall", b.color || 0xf0e0d0, 0.88, 0.02, 0xd4c2a8);
-    base.buildingFacadelight = 0;
-
     const baseBody = cube(w, h, d, wallMat, b.x, 0, b.z, true, true);
     buildingsGroup.add(baseBody);
 
