@@ -1,0 +1,10 @@
+import { defineConfig } from "vite";
+
+export default defineConfig({
+  test: {
+    environment: "jsdom",
+    globals: true,
+    passWithNoTests: true,
+    include: ["tests/**/*.test.js"]
+  }
+});
