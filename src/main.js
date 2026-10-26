@@ -39,6 +39,7 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.05;
 
 const world = buildWorldData();
+world.staticCollisionBoxes = Array.isArray(world.collisionBoxes) ? world.collisionBoxes.slice() : [];
 const { group, buildingsGroup, ocean } = buildScene(scene, world, { renderer });
 
 const cars = createCarEntities(world, scene);
@@ -213,12 +214,16 @@ function frame(now) {
   if (gameMode === "driving" && activeVehicle) {
     // driving
     const kbSnapshot = getKeyboardSnapshot(keyboard);
+    const driveSpeed = (activeVehicle && Number.isFinite(activeVehicle.speed)) ? activeVehicle.speed : 0;
     const carInput = {
       throttle: kbSnapshot.forward,
-      brake: kbSnapshot.backward,
       left: kbSnapshot.left,
       right: kbSnapshot.right
     };
+    if (kbSnapshot.backward) {
+      if (driveSpeed > 0.35) carInput.brake = true;
+      else carInput.reverse = true;
+    }
     stepVehicle(activeVehicle, carInput, dt, world);
     syncPlayerToVehicle();
   } else {
@@ -238,6 +243,17 @@ function frame(now) {
   // world simulations
   updateTraffic(cars, dt, world);
   updatePedestrians(peds, dt);
+  // Keep ped collision boxes roughly in sync for the next frame's resolvers.
+  world.collisionBoxes = (world.staticCollisionBoxes || []).concat(
+    peds.map((ped) => ({
+      type: "pedestrian",
+      id: ped.id,
+      minX: ped.x - 0.35,
+      maxX: ped.x + 0.35,
+      minZ: ped.z - 0.35,
+      maxZ: ped.z + 0.35
+    }))
+  );
 
   // HUD prompt
   const nearIdx = (gameMode === "onFoot") ? nearestEnterableVehicle() : -1;

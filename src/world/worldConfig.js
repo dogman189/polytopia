@@ -130,8 +130,32 @@ export function buildWorldData() {
     }));
   });
 
-  // Collision boxes for every building plus the ocean retaining wall.
+  // Street-lamp positions (consistent with scene builder) used for props and collision.
+  const lampPositions = [];
+  for (let x = -48; x <= 48; x += 16) {
+    lampPositions.push([x, 11.0]);
+    lampPositions.push([x, 27.8]);
+  }
+  for (let x = -56; x <= 56; x += 28) {
+    lampPositions.push([x, 58.8]);
+  }
+  const lamps = lampPositions.map(([x, z], i) => ({
+    id: `street-lamp-${i + 1}`,
+    type: "street-lamp",
+    x,
+    z
+  }));
+
+  // Collision boxes for every building plus static props (palms + lamps).
   const collisionBoxes = buildings.map(buildingBox);
+  lamps.forEach((l) => collisionBoxes.push({
+    id: l.id,
+    type: "street-lamp",
+    minX: l.x - 0.26,
+    maxX: l.x + 0.26,
+    minZ: l.z - 0.26,
+    maxZ: l.z + 0.26
+  }));
 
   const oceanWall = {
     id: "ocean-wall",
@@ -177,6 +201,15 @@ export function buildWorldData() {
     z,
     height: 4 + (i % 3),
     radius: 0.6
+  }));
+  // Palm prop collision boxes.
+  props.forEach((p) => collisionBoxes.push({
+    id: p.id,
+    type: "palm",
+    minX: p.x - 0.35,
+    maxX: p.x + 0.35,
+    minZ: p.z - 0.35,
+    maxZ: p.z + 0.35
   }));
 
   // Traffic routes: 3 rectangular loops.
@@ -323,6 +356,7 @@ export function buildWorldData() {
     collisionBoxes,
     buildings,
     props,
+    lamps,
     ocean,
     spawns,
     trafficRoutes,

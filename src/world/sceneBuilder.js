@@ -357,14 +357,9 @@ export function buildScene(scene, world, opts) {
     roughness: 0.3
   });
   const lampGeo = new THREE.SphereGeometry(0.2, 8, 6);
-  const lampPositions = [];
-  for (let x = -48; x <= 48; x += 16) {
-    lampPositions.push([x, 11.0]);
-    lampPositions.push([x, 27.8]);
-  }
-  for (let x = -56; x <= 56; x += 28) {
-    lampPositions.push([x, 58.8]);
-  }
+  const lampPositions = (world && Array.isArray(world.lamps))
+    ? world.lamps.map((l) => [l.x, l.z])
+    : [];
   for (const [x, z] of lampPositions) {
     const pole = cube(0.10, 3.4, 0.10, poleMat, x, 1.7, z, true, true);
     buildingsGroup.add(pole);
