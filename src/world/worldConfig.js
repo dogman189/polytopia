@@ -70,7 +70,7 @@ export function buildWorldData() {
     })
   );
   buildings.push(
-    makeBuilding("pier", "landmark", 12, 59, 24, 3, 1, {
+    makeBuilding("pier", "landmark", 12, 59, 24, 2, 1, {
       name: "Pier",
       color: "#c9a46b"
     })
@@ -150,18 +150,18 @@ export function buildWorldData() {
 
   // Traffic routes: 3 rectangular loops.
   const routePointsA = [
-    point(-55, 2),
-    point(55, 2),
+    point(-55, 8),
+    point(55, 8),
     point(55, 50),
     point(-55, 50),
-    point(-55, 2)
+    point(-55, 8)
   ];
   const routePointsB = [
-    point(-40, 10),
-    point(40, 10),
-    point(40, 32),
-    point(-40, 32),
-    point(-40, 10)
+    point(-55, 10),
+    point(55, 10),
+    point(55, 32),
+    point(-55, 32),
+    point(-55, 10)
   ];
   const routePointsC = [
     point(-20, 40),
@@ -190,18 +190,18 @@ export function buildWorldData() {
 
   // Two pedestrian loops.
   const pedPointsA = [
-    point(-55, 4),
-    point(55, 4),
+    point(-55, 8),
+    point(55, 8),
     point(55, 46),
     point(-55, 46),
-    point(-55, 4)
+    point(-55, 8)
   ];
   const pedPointsB = [
-    point(-50, 18),
-    point(50, 18),
-    point(50, 34),
-    point(-50, 34),
-    point(-50, 18)
+    point(-55, 10),
+    point(55, 10),
+    point(55, 40),
+    point(-55, 40),
+    point(-55, 10)
   ];
 
   const makePedRoute = (id, points) => {
