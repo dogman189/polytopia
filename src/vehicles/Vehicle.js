@@ -156,7 +156,7 @@ export function createVehicle(spec = {}) {
 export function stepVehicle(vehicle, input, dt, world) {
   if (!vehicle) return vehicle;
 
-  const w = (world === undefined || world === null) ? buildWorldData() : world;
+  const w = world || buildWorldData();
   const safeDt = Math.max(0, toFinite(dt, 0));
 
   // Ensure finite numeric state.
@@ -175,11 +175,11 @@ export function stepVehicle(vehicle, input, dt, world) {
   }
 
   const inp = input || {};
-  const throttle = hasFlag(inp, ["throttle", "accelerate", "accel", "gas", "forward", "w"]);
-  const brake = hasFlag(inp, ["brake", "braking"]);
+  const throttle = hasFlag(inp, ["throttle", "accelerate", "accel", "gas", "forward", "w", "arrowup"]);
+  const brake = hasFlag(inp, ["brake", "braking", "s", "arrowdown"]);
   const reverse = hasFlag(inp, ["reverse", "backward", "back", "reverseGear"]);
-  const left = hasFlag(inp, ["left", "steerLeft", "a"]);
-  const right = hasFlag(inp, ["right", "steerRight", "d"]);
+  const left = hasFlag(inp, ["left", "steerLeft", "a", "arrowleft"]);
+  const right = hasFlag(inp, ["right", "steerRight", "d", "arrowright"]);
 
   let steerInput = right - left;
   if (Number.isFinite(inp.steer)) steerInput += inp.steer;
@@ -255,6 +255,8 @@ export function stepVehicle(vehicle, input, dt, world) {
   const cosYaw = Math.cos(yaw);
   let x = vehicle.x;
   let z = vehicle.z;
+  const loopStartX = x;
+  const loopStartZ = z;
   for (let i = 0; i < steps; i += 1) {
     const prev = { x, y: vehicle.y, z };
     const nx = x + sinYaw * speed * stepDt;
@@ -272,6 +274,8 @@ export function stepVehicle(vehicle, input, dt, world) {
   const resolvedX = toFinite(next.x, prevX);
   const resolvedZ = toFinite(next.z, prevZ);
   const resolvedY = toFinite(vehicle.y, vehicle.y);
+
+  // ready to commit:speed; collision blocking affects position, but scalar momentum is retained.
 
   vehicle.yaw = yaw;
   vehicle.speed = speed;
