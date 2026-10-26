@@ -69,7 +69,7 @@ const COUNTS = Object.freeze({
   PED_ROUTES: 2
 });
 
-const CONSTANTS = {
+const CONSTANTS = Object.freeze({
   WORLD,
   PLAYER,
   VEHICLE,
@@ -92,7 +92,8 @@ const CONSTANTS = {
   WALK_SPEED: PLAYER.WALK_SPEED,
   RUN_SPEED: PLAYER.RUN_SPEED,
   MAX_SPEED: VEHICLE.MAX_SPEED
-};
+});
+Object.freeze(CONSTANTS);
 
 export { CONSTANTS };
 export default CONSTANTS;
