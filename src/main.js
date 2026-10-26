@@ -12,7 +12,10 @@ import { updateFollowCamera } from "./camera/followCamera.js";
 import { createKeyboardState } from "./input/keyboard.js";
 import { createMouseState } from "./input/mouse.js";
 import { resolveMovement } from "./world/collision.js";
-import updateHUD from "./ui/hud.js";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { SSAOPass } from "three/addons/postprocessing/SSAOPass.js";
+import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 
 const app = document.querySelector("#app");
 const scene = new THREE.Scene();
@@ -27,6 +30,9 @@ const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 if (app) app.appendChild(renderer.domElement);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.08;
 
 const world = buildWorldData();
 const { group, buildingsGroup, ocean } = buildScene(scene, world, { renderer });
@@ -56,6 +62,25 @@ scene.add(playerAvatar);
 const PLAYER_RADIUS = (CONSTANTS && (CONSTANTS.PLAYER_RADIUS || (CONSTANTS.PLAYER && CONSTANTS.PLAYER.RADIUS))) || 0.4;
 
 let gameMode = "onFoot"; // 'onFoot' | 'driving'
+let composer = null;
+let ssaoPass = null;
+
+// after playerAvatar block (marker ensure origin point)
+try {
+  composer = new EffectComposer(renderer);
+  composer.addPass(new RenderPass(scene, camera));
+  ssaoPass = new SSAOPass(scene, camera, window.innerWidth, window.innerHeight);
+  ssaoPass.kernelRadius = 10;
+  ssaoPass.minDistance = 0.005;
+  ssaoPass.maxDistance = 0.18;
+  composer.addPass(ssaoPass);
+  composer.addPass(new OutputPass());
+} catch (err) {
+  console.warn("Post-processing disabled:", err);
+  composer = null;
+  ssaoPass = null;
+}
+
 let activeVehicle = null;
 let transitionCooldown = 0;
 let eWas = false;
@@ -102,6 +127,8 @@ function onResize() {
   camera.aspect = window.innerWidth / Math.max(1, window.innerHeight);
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
+  if (composer) composer.setSize(window.innerWidth, window.innerHeight);
+  if (ssaoPass && typeof ssaoPass.setSize === "function") ssaoPass.setSize(window.innerWidth, window.innerHeight);
 }
 window.addEventListener("resize", onResize);
 
@@ -234,7 +261,8 @@ function frame(now) {
     playerAvatar.visible = gameMode === "onFoot";
   }
 
-  renderer.render(scene, camera);
+  if (composer) composer.render();
+  else renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
 
