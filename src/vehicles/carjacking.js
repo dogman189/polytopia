@@ -83,14 +83,12 @@ function velocityMagnitude(vehicle) {
 function isMoving(vehicle) {
   if (!vehicle || typeof vehicle !== "object") return false;
   if (vehicle.moving === true || vehicle.isMoving === true) return true;
-  if (vehicle.parked === false && vehicle.idling !== true && vehicle.idle !== true) {
-    // A car explicitly marked unparked is considered moving unless an idle flag exists.
-  }
   return velocityMagnitude(vehicle) > 0.5;
 }
 
 function parkingAllowed(vehicle) {
   if (!vehicle || typeof vehicle !== "object") return false;
+  if (isMoving(vehicle)) return false;
   if (vehicle.parked === true || vehicle.idling === true || vehicle.idle === true) return true;
   if (vehicle.stopped === true || vehicle.stationary === true) return true;
 
