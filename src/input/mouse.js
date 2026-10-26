@@ -16,6 +16,7 @@ export function createMouseState(canvas) {
   const target = canvas || (typeof window !== "undefined" ? window : null);
 
   function start(e) {
+    if (e && typeof e.button === "number" && e.button !== 0) return;
     state.dragging = true;
     state.lastX = (e && typeof e.clientX === "number") ? e.clientX : 0;
     state.lastY = (e && typeof e.clientY === "number") ? e.clientY : 0;

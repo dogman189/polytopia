@@ -163,6 +163,10 @@ function normalizeBox(box) {
 }
 
 function circleBoxOverlap(px, pz, r, box) {
+  // Treat zero-radius circle as an explicit (inclusive) point test.
+  if (!(r > 0)) {
+    return px >= box.minX && px <= box.maxX && pz >= box.minZ && pz <= box.maxZ;
+  }
   const closestX = Math.min(Math.max(px, box.minX), box.maxX);
   const closestZ = Math.min(Math.max(pz, box.minZ), box.maxZ);
   const dx = px - closestX;
