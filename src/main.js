@@ -18,6 +18,7 @@ import { updateHUD } from "./ui/hud.js";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { SSAOPass } from "three/addons/postprocessing/SSAOPass.js";
+import { SSRPass } from "three/addons/postprocessing/SSRPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 
 const app = document.querySelector("#app");
@@ -90,6 +91,7 @@ const PLAYER_RADIUS = (CONSTANTS && (CONSTANTS.PLAYER_RADIUS || (CONSTANTS.PLAYE
 let gameMode = "onFoot"; // 'onFoot' | 'driving'
 let composer = null;
 let ssaoPass = null;
+let ssrPass = null;
 
 // after playerAvatar block (marker ensure origin point)
 try {
@@ -100,11 +102,24 @@ try {
   ssaoPass.minDistance = 0.005;
   ssaoPass.maxDistance = 0.18;
   composer.addPass(ssaoPass);
+  ssrPass = new SSRPass({
+    renderer,
+    scene,
+    camera,
+    width: Math.max(1, Math.floor(window.innerWidth * 0.5)),
+    height: Math.max(1, Math.floor(window.innerHeight * 0.5))
+  });
+  ssrPass.opacity = 0.72;
+  ssrPass.maxDistance = 90;
+  ssrPass.thickness = 0.018;
+  ssrPass.blur = true;
+  composer.addPass(ssrPass);
   composer.addPass(new OutputPass());
 } catch (err) {
   console.warn("Post-processing disabled:", err);
   composer = null;
   ssaoPass = null;
+  ssrPass = null;
 }
 
 let activeVehicle = null;
@@ -217,6 +232,7 @@ function onResize() {
   renderer.setSize(window.innerWidth, window.innerHeight);
   if (composer) composer.setSize(window.innerWidth, window.innerHeight);
   if (ssaoPass && typeof ssaoPass.setSize === "function") ssaoPass.setSize(window.innerWidth, window.innerHeight);
+  if (ssrPass && typeof ssrPass.setSize === "function") ssrPass.setSize(Math.max (1, Math.floor(window.innerWidth * 0.5)), Math.max(1, Math.floor(window.innerHeight * 0.5)));
 }
 window.addEventListener("resize", onResize);
 
