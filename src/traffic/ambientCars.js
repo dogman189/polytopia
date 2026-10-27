@@ -237,6 +237,7 @@ export function createCarEntities(world, scene, options = {}) {
 
     const mesh = createCarModel({
       name: s.id != null ? String(s.id) : undefined,
+      variant: s.variant,
       color: typeof s.color === "string" ? s.color : (traffic ? "#3b7ddd" : "#d64045")
     });
     mesh.position.set(x, 0, z);

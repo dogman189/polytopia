@@ -91,6 +91,7 @@ function addWheel(parent, x, z) {
  */
 export function createCarModel(options = {}) {
   const opts = options || {};
+  try { const _v = dispatchCreateCarVariant(opts); if (_v) return _v; } catch (e) {}
   const color = opts.color ?? 0xf1efe6;
   const accent = opts.accent ?? 0x1c2024;
 
@@ -211,3 +212,82 @@ export function createCarModel(options = {}) {
 }
 
 export default createCarModel;
+
+// ---- appended variants ----
+function makeSuvCar({ color = 0xf1efe6, name = "suv" }) {
+  const root = new THREE.Group(); root.name = name;
+  const m = baseMaterials(color);
+  addBox(root, 2.04, 0.52, 4.36, m.bodyMat, 0, 0.64, 0);
+  addBox(root, 1.98, 0.18, 4.2, m.bodyShadeMat, 0, 0.94, 0);
+  addBox(root, 1.84, 0.24, 1.56, m.bodyMat, 0, 1.1, 1.28);
+  addBox(root, 1.84, 0.24, 1.32, m.bodyMat, 0, 1.12, -1.52);
+  addBox(root, 1.66, 0.32, 1.72, m.glassMat, 0, 1.28, -0.12);
+  addBox(root, 1.72, 0.1, 1.46, m.bodyMat, 0, 1.47, -0.16);
+  addBox(root, 1.6, 0.04, 1.7, m.darkMat, 0, 1.6, -0.16);
+  for (const side of [-1, 1]) { addBox(root, 0.09, 0.3, 0.1, m.bodyShadeMat, side*0.78, 1.26, 0.52); addBox(root, 0.09, 0.3, 0.1, m.bodyShadeMat, side*0.78, 1.26, -0.82); }
+  addBox(root, 2, 0.22, 0.2, m.bodyMat, 0, 0.58, 2.22);
+  addBox(root, 1.96, 0.05, 0.22, m.darkMat, 0, 0.46, 2.24);
+  addBox(root, 1.4, 0.12, 0.04, m.lightMat, 0, 0.84, 2.26);
+  addBox(root, 0.14, 0.06, 0.04, m.amberMat, -0.92, 0.66, 2.25);
+  addBox(root, 0.14, 0.06, 0.04, m.amberMat, 0.92, 0.66, 2.25);
+  addBox(root, 2, 0.22, 0.2, m.bodyMat, 0, 0.58, -2.22);
+  addBox(root, 1.52, 0.1, 0.04, m.tailMat, 0, 0.88, -2.24);
+  for (const sx of [-0.92,0.92]) for (const sz of [1.48,-1.48]) addWheel(root, sx, sz);
+  root.userData={kind:"car",wheels:[],color};
+  return root;
+}
+function makeCompactCar({ color = 0xefeff0, name="compact" }) {
+  const root=new THREE.Group(); root.name=name;
+  const m=baseMaterials(color);
+  addBox(root,1.64,0.26,3.55,m.bodyMat,0,0.56,0);
+  addBox(root,1.58,0.14,3.42,m.bodyShadeMat,0,0.76,0);
+  addBox(root,1.42,0.16,1.12,m.bodyMat,0,0.84,-1.32);
+  addBox(root,1.46,0.17,0.98,m.bodyMat,0,0.86,1.28);
+  addBox(root,1.38,0.26,1.38,m.glassMat,0,1.0,-0.16);
+  addBox(root,1.46,0.1,1.1,m.bodyMat,0,1.18,-0.24);
+  addBox(root,1.6,0.18,0.18,m.bodyMat,0,0.58,1.76);
+  addBox(root,1.6,0.18,0.18,m.bodyMat,0,0.58,-1.76);
+  addBox(root,1.34,0.1,0.04,m.lightMat,0,0.82,1.78);
+  addBox(root,0.12,0.06,0.04,m.amberMat,-0.66,0.66,1.77);
+  addBox(root,0.12,0.06,0.04,m.amberMat,0.66,0.66,1.77);
+  addBox(root,1.34,0.08,0.04,m.tailMat,0,0.78,-1.77);
+  addBox(root,0.12,0.06,0.04,m.tailMat,0.66,0.64,-1.77);
+  addBox(root,0.12,0.06,0.04,m.tailMat,-0.66,0.64,-1.77);
+  for(const sx of [-0.72,0.72]) for(const sz of [1.1,-1.1]) addWheel(root,sx,sz);
+  root.userData={kind:"car",wheels:[],color};
+  return root;
+}
+function makePickupCar({ color = 0x2f6f4a, name="pickup" }) {
+  const root=new THREE.Group(); root.name=name;
+  const m=baseMaterials(color);
+  addBox(root,1.9,0.34,2.12,m.bodyMat,0,0.56,0.62);
+  addBox(root,1.86,0.16,2,m.bodyShadeMat,0,0.79,0.6);
+  addBox(root,1.6,0.3,1.1,m.glassMat,0,1.02,0.96);
+  addBox(root,1.7,0.1,1,m.bodyMat,0,1.2,0.98);
+  addBox(root,0.02,0.28,1.05,m.darkMat,-0.94,0.72,0.62);
+  addBox(root,0.02,0.28,1.05,m.darkMat,0.94,0.72,0.62);
+  addBox(root,1.92,0.18,2.16,m.bodyMat,0,0.54,-1.62);
+  addBox(root,1.72,0.16,2,m.darkMat,0,0.46,-1.62);
+  addBox(root,0.05,0.12,2.04,m.bodyShadeMat,-0.9,0.7,-1.62);
+  addBox(root,0.05,0.12,2.04,m.bodyShadeMat,0.9,0.7,-1.62);
+  addBox(root,1.8,0.1,0.05,m.bodyShadeMat,0,0.7,-0.56);
+  addBox(root,1.8,0.1,0.05,m.bodyShadeMat,0,0.7,-2.62);
+  addBox(root,1.9,0.2,0.2,m.bodyMat,0,0.58,1.68);
+  addBox(root,1.8,0.05,0.22,m.darkMat,0,0.46,1.7);
+  addBox(root,1.2,0.14,0.06,m.lightMat,-0.34,0.84,1.74);
+  addBox(root,1.2,0.14,0.06,m.lightMat,0.34,0.84,1.74);
+  addBox(root,0.12,0.06,0.06,m.amberMat,-0.86,0.66,1.73);
+  addBox(root,0.12,0.06,0.06,m.amberMat,0.86,0.66,1.73);
+  addBox(root,1.92,0.5,0.12,m.bodyMat,0,0.58,-2.72);
+  addBox(root,1.52,0.08,0.04,m.tailMat,0,0.66,-2.78);
+  for(const sx of [-0.88,0.88]) for(const sz of [1.2,-2.08]) addWheel(root,sx,sz);
+  root.userData={kind:"car",wheels:[],color};
+  return root;
+}
+function dispatchCreateCarVariant(opts) {
+  const variant=String(opts.variant||opts.type||'sport').toLowerCase();
+  if (variant==='suv') return makeSuvCar(opts);
+  if (variant==='compact') return makeCompactCar(opts);
+  if (variant==='pickup') return makePickupCar(opts);
+  return null;
+}

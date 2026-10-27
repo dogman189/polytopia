@@ -292,13 +292,14 @@ export function buildWorldData() {
 
   const carColors = ["#d64045", "#3b7ddd", "#f2c14e", "#7a9e7e", "#9b5de5", "#f77f00", "#4cc9f0", "#90be6d"];
 
-  const parkedCars = parkedPositions.map(([x, z, yaw], i) => ({
+  const parkedCars = parkedPositions.map(([x, z, yaw, variant], i) => ({
     id: `parked-car-${i + 1}`,
     type: "car",
     x,
     z,
     yaw: yaw || 0,
     heading: yaw || 0,
+    variant: variant || ["sport","suv","compact","pickup"][(i) % 4],
     color: carColors[i % carColors.length],
     traffic: false,
     parked: true,
@@ -312,6 +313,7 @@ export function buildWorldData() {
     parkedCars.push({
       id: `traffic-car-${i + 1}`,
       type: "car",
+      variant: ["sport","suv","compact","pickup"][(parkedPositions.length + i) % 4],
       x: start.x,
       z: start.z,
       yaw: 0,
