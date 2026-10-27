@@ -211,7 +211,32 @@ export function createCarModel(options = {}) {
   return root;
 }
 
+export function spinCarWheels(carOrMesh, speed, dt) {
+  const mesh = (carOrMesh && carOrMesh.mesh) ? carOrMesh.mesh : carOrMesh;
+  const wheels = (mesh && mesh.userData && Array.isArray(mesh.userData.wheels)) ? mesh.userData.wheels : [];
+  const safeSpeed = Number.isFinite(speed) ? speed : 0;
+  const safeDt = Number.isFinite(dt) ? dt : 0;
+  const angularSpeed = safeSpeed / 0.37;
+  for (const wheel of wheels) {
+    if (wheel && wheel.rotation) {
+      wheel.rotation.x += angularSpeed * safeDt;
+    }
+  }
+}
+
 export default createCarModel;
+
+function baseMaterials(color) {
+  return {
+    bodyMat: material(color, { roughness: 0.32, metalness: 0.28 }),
+    bodyShadeMat: material(color, { roughness: 0.38, metalness: 0.22 }),
+    glassMat: material(0x0b1620, { roughness: 0.06, metalness: 0.5 }),
+    darkMat: material(0x1c2024, { roughness: 0.75, metalness: 0.1 }),
+    lightMat: material(0xfff1c2, { emissive: 0xffe6a0, emissiveIntensity: 0.8, roughness: 0.3 }),
+    tailMat: material(0xff160c, { emissive: 0xff160c, emissiveIntensity: 1.4, roughness: 0.35 }),
+    amberMat: material(0xf7a02b, { emissive: 0xf28a00, emissiveIntensity: 0.9, roughness: 0.35 })
+  };
+}
 
 // ---- appended variants ----
 function makeSuvCar({ color = 0xf1efe6, name = "suv" }) {
@@ -232,8 +257,9 @@ function makeSuvCar({ color = 0xf1efe6, name = "suv" }) {
   addBox(root, 0.14, 0.06, 0.04, m.amberMat, 0.92, 0.66, 2.25);
   addBox(root, 2, 0.22, 0.2, m.bodyMat, 0, 0.58, -2.22);
   addBox(root, 1.52, 0.1, 0.04, m.tailMat, 0, 0.88, -2.24);
-  for (const sx of [-0.92,0.92]) for (const sz of [1.48,-1.48]) addWheel(root, sx, sz);
-  root.userData={kind:"car",wheels:[],color};
+  const wheels = [];
+  for (const sx of [-0.92, 0.92]) for (const sz of [1.48, -1.48]) wheels.push(addWheel(root, sx, sz));
+  root.userData = { kind: "car", wheels, color };
   return root;
 }
 function makeCompactCar({ color = 0xefeff0, name="compact" }) {
@@ -253,8 +279,9 @@ function makeCompactCar({ color = 0xefeff0, name="compact" }) {
   addBox(root,1.34,0.08,0.04,m.tailMat,0,0.78,-1.77);
   addBox(root,0.12,0.06,0.04,m.tailMat,0.66,0.64,-1.77);
   addBox(root,0.12,0.06,0.04,m.tailMat,-0.66,0.64,-1.77);
-  for(const sx of [-0.72,0.72]) for(const sz of [1.1,-1.1]) addWheel(root,sx,sz);
-  root.userData={kind:"car",wheels:[],color};
+  const wheels = [];
+  for (const sx of [-0.72, 0.72]) for (const sz of [1.1, -1.1]) wheels.push(addWheel(root, sx, sz));
+  root.userData = { kind: "car", wheels, color };
   return root;
 }
 function makePickupCar({ color = 0x2f6f4a, name="pickup" }) {
@@ -280,8 +307,9 @@ function makePickupCar({ color = 0x2f6f4a, name="pickup" }) {
   addBox(root,0.12,0.06,0.06,m.amberMat,0.86,0.66,1.73);
   addBox(root,1.92,0.5,0.12,m.bodyMat,0,0.58,-2.72);
   addBox(root,1.52,0.08,0.04,m.tailMat,0,0.66,-2.78);
-  for(const sx of [-0.88,0.88]) for(const sz of [1.2,-2.08]) addWheel(root,sx,sz);
-  root.userData={kind:"car",wheels:[],color};
+  const wheels = [];
+  for (const sx of [-0.88, 0.88]) for (const sz of [1.2, -2.08]) wheels.push(addWheel(root, sx, sz));
+  root.userData = { kind: "car", wheels, color };
   return root;
 }
 function dispatchCreateCarVariant(opts) {

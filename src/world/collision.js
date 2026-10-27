@@ -128,7 +128,7 @@ function normalizeBox(box) {
     let hw = toNumber(box.halfWidth ?? box.halfW ?? box.halfX, NaN);
     let hd = toNumber(box.halfDepth ?? box.halfD ?? box.halfZ ?? box.halfH, NaN);
     const w = toNumber(box.w ?? box.width ?? box.sizeX ?? box.size?.x ?? box.sx, NaN);
-    const d = toNumber(box.d ?? box.depth ?? box.sizeZ ?? box.size?.z, NaN);
+    const d = toNumber(box.d ?? box.depth ?? box.sizeZ ?? box.size?.z ?? box.l ?? box.length, NaN);
     const h = toNumber(box.h ?? box.height, NaN);
     if (!Number.isFinite(hw)) {
       if (Number.isFinite(w)) hw = w / 2;
@@ -139,6 +139,20 @@ function normalizeBox(box) {
       else if (Number.isFinite(h) && Number.isFinite(w)) hd = h / 2; // 2D convenience
     }
     if (Number.isFinite(hw) && Number.isFinite(hd) && hw >= 0 && hd >= 0) {
+      const yaw = isFiniteNumber(box.yaw)
+        ? box.yaw
+        : (isFiniteNumber(box.rotation) ? box.rotation : null);
+      if (Number.isFinite(yaw)) {
+        return Object.assign(
+          { shape: "rotated-rect", cx, cz, yaw, hw, hd },
+          {
+            minX: cx - Math.max(hw, hd),
+            maxX: cx + Math.max(hw, hd),
+            minZ: cz - Math.max(hw, hd),
+            maxZ: cz + Math.max(hw, hd)
+          }
+        );
+      }
       return {
         minX: cx - hw,
         maxX: cx + hw,
@@ -174,6 +188,26 @@ function circleBoxOverlap(px, pz, r, box) {
   return dx * dx + dz * dz < r * r;
 }
 
+function circleRotatedRectOverlap(px, pz, r, box) {
+  const dx = px - box.cx;
+  const dz = pz - box.cz;
+  const yaw = box.yaw || 0;
+  const cy = Math.cos(yaw);
+  const sy = Math.sin(yaw);
+  const lx = dx * cy + dz * sy;
+  const lz = -dx * sy + dz * cy;
+  const hw = box.hw || 0;
+  const hd = box.hd || 0;
+  if (!(r > 0)) {
+    return Math.abs(lx) <= hw && Math.abs(lz) <= hd;
+  }
+  const clampedX = Math.max(-hw, Math.min(lx, hw));
+  const clampedZ = Math.max(-hd, Math.min(lz, hd));
+  const ddx = lx - clampedX;
+  const ddz = lz - clampedZ;
+  return ddx * ddx + ddz * ddz < r * r;
+}
+
 function clamp(v, lo, hi) {
   if (lo > hi) return (lo + hi) / 2;
   return Math.min(Math.max(v, lo), hi);
@@ -203,7 +237,11 @@ export function resolveMovement(prev, next, radius, boxes, bounds) {
     .filter(Boolean);
 
   const collides = (cx, cz) =>
-    normalizedBoxes.some((box) => circleBoxOverlap(cx, cz, r, box));
+    normalizedBoxes.some((box) =>
+      box && box.shape === "rotated-rect"
+        ? circleRotatedRectOverlap(cx, cz, r, box)
+        : circleBoxOverlap(cx, cz, r, box)
+    );
 
   let x = previous.x;
   let z = previous.z;
@@ -223,3 +261,4 @@ export function resolveMovement(prev, next, radius, boxes, bounds) {
 }
 
 export default resolveMovement;
+export { circleBoxOverlap, circleRotatedRectOverlap };

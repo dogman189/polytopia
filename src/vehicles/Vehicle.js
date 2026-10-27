@@ -275,6 +275,14 @@ export function stepVehicle(vehicle, input, dt, world) {
   const resolvedZ = toFinite(next.z, prevZ);
   const resolvedY = toFinite(vehicle.y, vehicle.y);
 
+  // Dissipate longitudinal energy when collisions prevent the intended travel.
+  const intendedDistance = totalDistance;
+  const travelledDistance = Math.hypot(resolvedX - loopStartX, resolvedZ - loopStartZ);
+  const travelRatio = intendedDistance > 1e-6 ? (travelledDistance / intendedDistance) : 1;
+  if (travelRatio < 0.98) {
+    speed = Math.sign(speed) * Math.abs(speed) * Math.max(0, travelRatio);
+  }
+
   // ready to commit:speed; collision blocking affects position, but scalar momentum is retained.
 
   vehicle.yaw = yaw;

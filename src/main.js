@@ -7,11 +7,12 @@ import { stepFoot } from "./player/playerController.js";
 import { stepVehicle } from "./vehicles/Vehicle.js";
 import { nearestVehicle, canEnter, exitPosition, INTERACT_RADIUS } from "./vehicles/carjacking.js";
 import { createCarEntities, updateTraffic } from "./traffic/ambientCars.js";
+import { spinCarWheels } from "./vehicles/carModel.js";
 import { createPedestrianEntities, updatePedestrians } from "./peds/pedestrians.js";
 import { updateFollowCamera } from "./camera/followCamera.js";
 import { createKeyboardState } from "./input/keyboard.js";
 import { createMouseState } from "./input/mouse.js";
-import { resolveMovement } from "./world/collision.js";
+import { resolveMovement, circleBoxOverlap } from "./world/collision.js";
 import { createCharacter, animateCharacter } from "./world/characterModel.js";
 import { updateHUD } from "./ui/hud.js";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
@@ -41,6 +42,20 @@ renderer.toneMappingExposure = 1.05;
 const world = buildWorldData();
 world.staticCollisionBoxes = Array.isArray(world.collisionBoxes) ? world.collisionBoxes.slice() : [];
 const { group, buildingsGroup, ocean } = buildScene(scene, world, { renderer });
+
+const brokenProps = new Set();
+const propMeshes = new Map();
+
+(function registerProps() {
+  for (const prop of [...(world.props || []), ...(world.lamps || [])]) {
+    prop.fallen = false;
+  }
+  scene.traverse((obj) => {
+    if (obj.isGroup && obj.name && (obj.name.startsWith("palm-") || obj.name.startsWith("street-lamp-"))) {
+      propMeshes.set(obj.name, obj);
+    }
+  });
+})();
 
 const cars = createCarEntities(world, scene);
 const peds = createPedestrianEntities(world, scene);
@@ -96,6 +111,7 @@ let activeVehicle = null;
 let transitionCooldown = 0;
 let eWas = false;
 let avatarTime = 0;
+const VEHICLE_RADIUS = 1.3;
 
 function isEPressed(keyboardState) {
   return !!(keyboardState && keyboardState.isDown && keyboardState.isDown("KeyE"));
@@ -133,6 +149,66 @@ function currentSpeed() {
 
 function nearestEnterableVehicle() {
   return nearestVehicle(player.position, cars, INTERACT_RADIUS);
+}
+
+function carDimensions(variant) {
+  const v = String(variant || "sport").toLowerCase();
+  if (v === "suv") return { width: 2.04, length: 4.36 };
+  if (v === "compact") return { width: 1.64, length: 3.55 };
+  if (v === "pickup") return { width: 1.9, length: 4.28 };
+  return { width: 1.98, length: 4.24 };
+}
+
+function carCollisionBox(car, index) {
+  const variant = (car && (car.variant || (car.data && car.data.variant))) || "sport";
+  const dims = carDimensions(variant);
+  const yaw = Number.isFinite(car && car.yaw) ? car.yaw : 0;
+  const cos = Math.cos(yaw);
+  const sin = Math.sin(yaw);
+  const hx = dims.width / 2 + 0.08; // small fender allowance
+  const hz = dims.length / 2 + 0.08;
+  const corners = [
+    { x: hx * cos - hz * sin, z: hx * sin + hz * cos },
+    { x: hx * cos + hz * sin, z: hx * sin - hz * cos },
+    { x: -hx * cos - hz * sin, z: -hx * sin + hz * cos },
+    { x: -hx * cos + hz * sin, z: -hx * sin - hz * cos }
+  ];
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minZ = Infinity;
+  let maxZ = -Infinity;
+  for (const c of corners) {
+    minX = Math.min(minX, c.x);
+    maxX = Math.max(maxX, c.x);
+    minZ = Math.min(minZ, c.z);
+    maxZ = Math.max(maxZ, c.z);
+  }
+  const x = Number.isFinite(car && car.x) ? car.x : 0;
+  const z = Number.isFinite(car && car.z) ? car.z : 0;
+  return {
+    id: car && car.id ? String(car.id) : ("car-" + index),
+    type: "car",
+    shape: "rotated-rect",
+    x,
+    z,
+    yaw: Number.isFinite(car && car.yaw) ? car.yaw : 0,
+    w: dims.width,
+    d: dims.length,
+    hx: dims.width / 2 + 0.08,
+    hd: dims.length / 2 + 0.08,
+    cx: x,
+    cz: z,
+    hw: dims.width / 2 + 0.08,
+    height: 1.1,
+    cy: x,
+    cd: z,
+    minX: x + minX,
+    maxX: x + maxX,
+    minZ: z + minZ,
+    maxZ: z + maxZ,
+    minY: 0,
+    maxY: 1.1
+  };
 }
 
 function onResize() {
@@ -188,7 +264,7 @@ function frame(now) {
           { x: vehicle.x, y: 0, z: vehicle.z },
           { x: exit.x, y: 0, z: exit.z },
           PLAYER_RADIUS,
-          world.collisionBoxes,
+          (world.collisionBoxes || []).filter((box) => !(box && box.type === "car" && String(box.id) === String(activeVehicle ? activeVehicle.id : ""))),
           world.bounds
         );
         player.position.x = Number.isFinite(safe && safe.x) ? safe.x : exit.x;
@@ -224,8 +300,48 @@ function frame(now) {
       if (driveSpeed > 0.35) carInput.brake = true;
       else carInput.reverse = true;
     }
+    // Avoid self-collision: the active car must not treat its own collider as a wall.
+    const allCollisionBoxes = world.collisionBoxes;
+    const previousCollisionBoxes = allCollisionBoxes;
+    if (Array.isArray(allCollisionBoxes) && activeVehicle) {
+      world.collisionBoxes = allCollisionBoxes.filter(
+        (box) => !(box && box.type === "car" && String(box.id) === String(activeVehicle.id))
+      );
+    }
     stepVehicle(activeVehicle, carInput, dt, world);
+    if (previousCollisionBoxes) world.collisionBoxes = previousCollisionBoxes;
+    // Detect and topple props when the driven car hits them at speed.
+    if (activeVehicle) {
+      const speedAbs = Math.abs(activeVehicle.speed || 0);
+      if (speedAbs > 1) {
+        const propIds = [].concat(
+          (world.props || []).map((p) => p.id),
+          (world.lamps || []).map((l) => l.id)
+        );
+        for (const id of propIds) {
+          const box = (world.collisionBoxes || []).find(
+            (b) => b && b.type !== "car" && String(b.id) === String(id)
+          );
+          if (!box) continue;
+          const anyProp = (world.props || []).concat(world.lamps || []).find((p) => p.id === id);
+          if (!anyProp || anyProp.fallen) continue;
+          if (circleBoxOverlap(activeVehicle.x, activeVehicle.z, VEHICLE_RADIUS + 0.15, box)) {
+            anyProp.fallen = true;
+            brokenProps.add(anyProp.id);
+            const mesh = propMeshes.get(anyProp.id);
+            if (mesh) {
+              mesh.userData.falling = true;
+              mesh.userData.fallDone = false;
+            }
+            // hard crash: shed most speed on impact.
+            if (Math.abs(activeVehicle.speed) > 4) activeVehicle.speed = 0;
+            else activeVehicle.speed *= 0.25;
+          }
+        }
+      }
+    }
     syncPlayerToVehicle();
+    spinCarWheels(activeVehicle, activeVehicle.speed, dt);
   } else {
     // on foot
     const kbSnapshot = getKeyboardSnapshot(keyboard);
@@ -243,17 +359,24 @@ function frame(now) {
   // world simulations
   updateTraffic(cars, dt, world);
   updatePedestrians(peds, dt);
-  // Keep ped collision boxes roughly in sync for the next frame's resolvers.
-  world.collisionBoxes = (world.staticCollisionBoxes || []).concat(
-    peds.map((ped) => ({
-      type: "pedestrian",
-      id: ped.id,
-      minX: ped.x - 0.35,
-      maxX: ped.x + 0.35,
-      minZ: ped.z - 0.35,
-      maxZ: ped.z + 0.35
-    }))
-  );
+  // Keep ped and vehicle collision boxes roughly in sync for the next frame's resolvers.
+  const carCollisionBoxes = cars.map((car, index) => carCollisionBox(car, index));
+  const staticBoxes = (world.staticCollisionBoxes || []).filter((b) => !brokenProps.has(String(b.id)));
+  world.collisionBoxes = staticBoxes
+    .concat(carCollisionBoxes)
+    .concat(
+      peds.map((ped) => ({
+        type: "pedestrian",
+        id: ped.id,
+        minX: ped.x - 0.35,
+        maxX: ped.x + 0.35,
+        minZ: ped.z - 0.35,
+        maxZ: ped.z + 0.35,
+        minY: 0,
+        maxY: 1.8,
+        height: 1.8
+      }))
+    );
 
   // HUD prompt
   const nearIdx = (gameMode === "onFoot") ? nearestEnterableVehicle() : -1;
@@ -271,6 +394,17 @@ function frame(now) {
     // ignore HUD errors to keep frame loop alive
   }
 
+  // Animate fallen props/trees/lamps toppling to the ground.
+  for (const mesh of propMeshes.values()) {
+    if (mesh.userData && mesh.userData.falling && !mesh.userData.fallDone) {
+      mesh.rotation.z = Math.min(Math.PI / 2, mesh.rotation.z + dt * 4.5);
+      if (mesh.rotation.z >= Math.PI / 2 - 0.001) {
+        mesh.userData.fallDone = true;
+        mesh.rotation.z = Math.PI / 2;
+      }
+    }
+  }
+
   // camera
   const cameraTarget = (gameMode === "driving" && activeVehicle) ? activeVehicle : player;
   updateFollowCamera(camera, cameraTarget, mouse, dt, {
@@ -278,7 +412,10 @@ function frame(now) {
     height: 2.95,
     lookHeight: 1.25,
     shoulder: -0.45,
-    followSpeed: 12
+    followSpeed: 12,
+    obstacles: world.collisionBoxes.filter((box) => box.type !== "pedestrian"),
+    minDistance: 1.5,
+    collisionPadding: 0.4
   });
 
   // sync and animate the player avatar

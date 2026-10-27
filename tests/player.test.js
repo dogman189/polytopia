@@ -24,19 +24,22 @@ describe("stepFoot", () => {
 
   it("produces movement and velocity from forward input", () => {
     const world = buildWorldData();
-    const state = { position: { x: 0, y: 0, z: 24 }, yaw: 0, velocity: { x: 0, z: 0 } };
+    const state = { position: { x: 0, y: 0, z: 36.5 }, yaw: 0, velocity: { x: 0, z: 0 } };
     stepFoot(state, { forward: true }, 1, world);
     expect(Math.hypot(state.velocity.x, state.velocity.z)).toBeGreaterThan(0);
-    expect(state.position.z).toBeGreaterThan(24);
+    expect(state.position.z).toBeGreaterThan(36.5);
   });
 
   it("uses collision radius against world boxes", () => {
     const world = buildWorldData();
-    // Stand just outside the town hall, facing into it.
-    const state = { position: { x: 0, y: 0, z: 6.2 }, yaw: Math.PI, velocity: { x: 0, z: 0 } };
+    const townHall = world.buildings.find((b) => b.id === "town-hall");
+    expect(townHall).toBeDefined();
+    // Stand just north of the town hall, facing into it.
+    const frontZ = townHall.z + townHall.d / 2;
+    const state = { position: { x: townHall.x, y: 0, z: frontZ + 1.2 }, yaw: Math.PI, velocity: { x: 0, z: 0 } };
     // prime velocity by a small step, then a big step into the building
     stepFoot(state, { forward: true }, 10, world);
-    // z must not enter the town-hall footprint (center 0, half depth 5) plus radius
-    expect(state.position.z).toBeGreaterThanOrEqual(5 + 0.4 - 1e-6);
+    // z must not enter the town-hall footprint plus the player radius
+    expect(state.position.z).toBeGreaterThanOrEqual(frontZ + 0.4 - 1e-6);
   });
 });

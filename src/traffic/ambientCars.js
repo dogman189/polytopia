@@ -2,6 +2,7 @@
 // createCarEntities builds one mesh per car and exposes route metadata.
 // updateTraffic advances traffic cars along their routes and syncs meshes.
 import { createCarModel } from "../vehicles/carModel.js";
+import { spinCarWheels } from "../vehicles/carModel.js";
 
 function num(value, fallback = 0) {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
@@ -376,6 +377,7 @@ export function updateTraffic(cars, dt, world) {
       }
     }
 
+    spinCarWheels(car.mesh, car.speed, safeDt);
     syncMesh(car, 0.5);
   }
 

@@ -1,9 +1,29 @@
 // World data for Voxel Coastal City.
 // buildWorldData() returns a plain data object consumed by scene/player/vehicle/
 // traffic/pedestrian modules. All coordinates are world units (1 unit = 1 meter).
-// Layout is hand-authored to fit a ~120 x 70 playable map (bounds -60..60, -5..65).
+//
+// Layout is authored on a 200 x 145 map (x -100..100, z -5..140):
+//   4 horizontal roads (z = 8, 44, 80, 116) and 2 vertical roads (x = +/-75.2)
+//   create three walkable blocks, a town-hall plaza, and a beach at z ~121..133.
+// The beach, ocean, roads, sidewalks and plazas are the single source of truth
+// for both rendering and gameplay checks.
 
 import { CONSTANTS } from "../config/constants.js";
+
+const ROAD_WIDTH = 7;
+const SIDEWALK_WIDTH = 2.2;
+const SIDEWALK_OFFSET = ROAD_WIDTH / 2 + SIDEWALK_WIDTH / 2; // 4.6
+const HORIZONTAL_ROAD_Z = [8, 44, 80, 116];
+const VERTICAL_ROAD_X = [-75.2, 75.2];
+const VERTICAL_ROAD_Z = 62;
+const VERTICAL_ROAD_DEPTH = 115; // z 4.5..119.5, joins the first and last road
+const GROUND_MAX_Z = 121.7;
+const BEACH_MIN_Z = 121.7;
+const BEACH_MAX_Z = 133.2;
+const OCEAN_MIN_Z = 133.2;
+const OCEAN_MAX_Z = 293;
+const MAP_EDGE = 200;
+const BEACH_WIDTH = 220;
 
 function makeBuilding(id, type, x, z, w, d, h, extras = {}) {
   return {
@@ -20,6 +40,7 @@ function makeBuilding(id, type, x, z, w, d, h, extras = {}) {
     h,
     height: h,
     color: extras.color || "#d9d3c7",
+    facing: extras.facing || "south",
     rotation: extras.rotation || 0,
     ...extras
   };
@@ -29,10 +50,14 @@ function buildingBox(b) {
   return {
     id: b.id,
     type: "building",
+    buildingType: b.type,
     minX: b.x - b.w / 2,
     maxX: b.x + b.w / 2,
     minZ: b.z - b.d / 2,
-    maxZ: b.z + b.d / 2
+    maxZ: b.z + b.d / 2,
+    minY: 0,
+    maxY: b.h,
+    height: b.h
   };
 }
 
@@ -40,104 +65,204 @@ function point(x, z) {
   return { x, z };
 }
 
+function makeRoads() {
+  const roads = [];
+  for (const z of HORIZONTAL_ROAD_Z) {
+    roads.push({
+      id: `road-h-${z}`,
+      x: 0,
+      z,
+      w: MAP_EDGE,
+      d: ROAD_WIDTH,
+      orientation: "horizontal"
+    });
+  }
+  for (const x of VERTICAL_ROAD_X) {
+    roads.push({
+      id: `road-v-${x}`,
+      x,
+      z: VERTICAL_ROAD_Z,
+      w: ROAD_WIDTH,
+      d: VERTICAL_ROAD_DEPTH,
+      orientation: "vertical"
+    });
+  }
+  return roads;
+}
+
+function makeSidewalks() {
+  const sidewalks = [];
+  // Horizontal sidewalks skip the vertical-road intersections instead of
+  // painting pavement across the asphalt.
+  const horizontalSegments = [
+    { x: 0, w: 143.4 },
+    { x: -89.35, w: 21.3 },
+    { x: 89.35, w: 21.3 }
+  ];
+  for (const z of HORIZONTAL_ROAD_Z) {
+    for (const offset of [-SIDEWALK_OFFSET, SIDEWALK_OFFSET]) {
+      for (const segment of horizontalSegments) {
+        sidewalks.push({
+          id: `sidewalk-h-${z}-${offset}-${segment.x}`,
+          x: segment.x,
+          z: z + offset,
+          w: segment.w,
+          d: SIDEWALK_WIDTH,
+          orientation: "horizontal"
+        });
+      }
+    }
+  }
+  // Vertical sidewalks are split between intersections so they never paint
+  // pavement across a road.
+  const verticalSegments = [
+    { z: 26, d: 29 },
+    { z: 62, d: 29 },
+    { z: 98, d: 29 }
+  ];
+  for (const x of VERTICAL_ROAD_X) {
+    for (const offset of [-SIDEWALK_OFFSET, SIDEWALK_OFFSET]) {
+      for (const segment of verticalSegments) {
+        sidewalks.push({
+          id: `sidewalk-v-${x}-${offset}-${segment.z}`,
+          x: x + offset,
+          z: segment.z,
+          w: SIDEWALK_WIDTH,
+          d: segment.d,
+          orientation: "vertical"
+        });
+      }
+    }
+  }
+  return sidewalks;
+}
+
+function makeCrosswalks() {
+  const crosswalks = [];
+  for (const z of HORIZONTAL_ROAD_Z) {
+    for (const x of [-75.2, 0, 75.2]) {
+      crosswalks.push({
+        id: `crosswalk-${x}-${z}`,
+        x,
+        z,
+        w: 5.2,
+        d: ROAD_WIDTH - 0.5,
+        stripes: 5
+      });
+    }
+  }
+  return crosswalks;
+}
+
+function makeStorefronts() {
+  const rows = [
+    { z: 15.9, facing: "south", xs: [-66, -54, -42, -30, 30, 42, 54, 66] },
+    { z: 36.1, facing: "north", xs: [-66, -54, -42, -30, 30, 42, 54, 66] },
+    { z: 51.9, facing: "south", xs: [-66, -54, -42, -30, 30, 42, 54, 66] },
+    { z: 72.1, facing: "north", xs: [-66, -54, -42, -30, 30, 42, 54, 66] },
+    { z: 87.9, facing: "south", xs: [-66, -54, -42, -30, -18, -6, 6, 18, 30, 42, 54, 66] },
+    { z: 108.1, facing: "north", xs: [-38, -26, 26, 38] }
+  ];
+  const palette = ["#f7b267", "#f4845f", "#f25c54", "#70a9a1", "#8fbcd4"];
+  const buildings = [];
+  rows.forEach((row, rowIndex) => {
+    row.xs.forEach((x, index) => {
+      buildings.push(makeBuilding(
+        `storefront-r${rowIndex + 1}-${index + 1}`,
+        "storefront",
+        x,
+        row.z,
+        6.8,
+        4,
+        2.7 + (index % 3) * 0.45,
+        {
+          row: rowIndex + 1,
+          index: index + 1,
+          name: `Storefront ${rowIndex + 1}-${index + 1}`,
+          color: palette[(index + rowIndex) % palette.length],
+          facing: row.facing
+        }
+      ));
+    });
+  });
+  return buildings;
+}
+
+function makeCatalogBuildings() {
+  return [
+    // Landmarks around the town-hall plaza.
+    makeBuilding("town-hall", "landmark", 0, 23, 14, 12, 7, {
+      name: "Town Hall", color: "#f6f2e9", facing: "north"
+    }),
+    makeBuilding("market", "landmark", -50, 26, 12, 9, 4, {
+      name: "Market", color: "#f2d6a2", facing: "north"
+    }),
+    makeBuilding("library-1", "landmark", 17, 24, 14, 9, 6, {
+      name: "Library", color: "#fff3d6", facing: "south"
+    }),
+    // Residential block A.
+    makeBuilding("apt-1", "residential", -34, 26, 10, 8, 9, { color: "#f3e7df", facing: "south" }),
+    makeBuilding("apt-2", "residential", 43, 26, 10, 8, 10, { color: "#e8f0f0", facing: "north" }),
+    makeBuilding("house-block-1", "house", -65.5, 26, 7, 7, 4, { color: "#f7e6d5", facing: "south" }),
+    makeBuilding("pavilion-1", "pavilion", 59, 26, 12, 12, 6, { color: "#f5efe2", facing: "south" }),
+    // Block B: hotel and office towers.
+    makeBuilding("hotel-1", "hotel", 0, 61, 20, 13, 16, { color: "#cfe1f0", facing: "south" }),
+    makeBuilding("office-tower-1", "tower", -38, 61, 16, 11, 18, { color: "#ecf2f7", facing: "south" }),
+    makeBuilding("office-tower-2", "tower", 38, 61, 16, 11, 15, { color: "#ecf2f7", facing: "south" }),
+    makeBuilding("apt-3", "residential", -62, 61, 11, 8, 10, { color: "#f1e3d4", facing: "east" }),
+    // Block C: retail, warehouses and utilities.
+    makeBuilding("mall-1", "retail-mall", 0, 99, 36, 14, 7, { color: "#f4e9d8", facing: "south" }),
+    makeBuilding("warehouse-1", "warehouse", -56, 100, 24, 14, 6, { color: "#f6e2b6", facing: "south" }),
+    makeBuilding("warehouse-2", "warehouse", 56, 100, 24, 14, 6, { color: "#f6e2b6", facing: "south" }),
+    makeBuilding("industry-stack-1", "utility", -40, 100, 5, 5, 10, { color: "#c7d1d8", facing: "south" }),
+    // Houses on the quiet grass margins.
+    makeBuilding("coast-house-1", "house", -89, 26, 8, 7, 4, { color: "#f6d3c4", facing: "east" }),
+    makeBuilding("coast-house-2", "house", -89, 60, 8, 7, 4, { color: "#ecf3e8", facing: "east" }),
+    makeBuilding("coast-house-3", "house", -89, 96, 8, 7, 4, { color: "#f7e6d5", facing: "east" }),
+    makeBuilding("coast-house-4", "house", 89, 26, 8, 7, 4, { color: "#e9e1f2", facing: "west" }),
+    makeBuilding("coast-house-5", "house", 89, 60, 8, 7, 4, { color: "#f4e3c4", facing: "west" }),
+    makeBuilding("coast-house-6", "house", 89, 96, 8, 7, 4, { color: "#ddeaf2", facing: "west" }),
+    // Coast landmarks.
+    makeBuilding("lighthouse", "landmark", 92, 126, 5, 5, 13, {
+      name: "Lighthouse", color: "#ffffff", facing: "south"
+    }),
+    makeBuilding("pier", "landmark", 12, 137, 4, 10, 0.7, {
+      name: "Pier", color: "#c9a46b", facing: "south"
+    })
+  ];
+}
+
 export function buildWorldData() {
   const C = CONSTANTS;
   const W = C.WORLD || {};
-  const minX = W.MIN_X ?? C.MIN_X ?? -60;
-  const maxX = W.MAX_X ?? C.MAX_X ?? 60;
+  const minX = W.MIN_X ?? C.MIN_X ?? -100;
+  const maxX = W.MAX_X ?? C.MAX_X ?? 100;
   const minZ = W.MIN_Z ?? C.MIN_Z ?? -5;
-  const maxZ = W.MAX_Z ?? C.MAX_Z ?? 65;
+  const maxZ = W.MAX_Z ?? C.MAX_Z ?? 140;
 
-  const buildings = [];
-
-  // Four anchors.
-  buildings.push(
-    makeBuilding("town-hall", "landmark", 0, 0, 12, 10, 6, {
-      name: "Town Hall",
-      color: "#f6f2e9"
-    })
-  );
-  buildings.push(
-    makeBuilding("market", "landmark", -42, 22, 14, 12, 4, {
-      name: "Market",
-      color: "#f2d6a2"
-    })
-  );
-  buildings.push(
-    makeBuilding("lighthouse", "landmark", 48, 56, 4, 4, 12, {
-      name: "Lighthouse",
-      color: "#ffffff"
-    })
-  );
-  buildings.push(
-    makeBuilding("pier", "landmark", 12, 59, 24, 2, 1, {
-      name: "Pier",
-      color: "#c9a46b"
-    })
-  );
-
-  // Rows of storefronts across the expanded neighborhood.
-  const storeColumns = 17;
-  const storeSpacing = 10;
-  const storeStartX = -80;
-  const storefrontRows = [16, 40, 64, 88];
-  for (let row = 0; row < storefrontRows.length; row += 1) {
-    for (let i = 0; i < storeColumns; i += 1) {
-      const x = storeStartX + i * storeSpacing;
-      const z = storefrontRows[row];
-      const palette = ["#f7b267", "#f4845f", "#f25c54", "#70a9a1", "#8fbcd4"][
-        (i + row) % 5
-      ];
-      buildings.push(
-        makeBuilding(`storefront-r${row + 1}-${i + 1}`, "storefront", x, z, 6, 4, 2 + (i % 3), {
-          row: row + 1,
-          index: i + 1,
-          name: `Storefront ${row * storeColumns + i + 1}`,
-          color: palette
-        })
-      );
-    }
-  }
-
-  // Bigger catalog of varied building styles added across the city.
-  const catalogBuildings = [
-    // Residential apartments along the first avenue.
-    { id: "apt-1", type: "residential", x: -74, z: 18, w: 12, d: 9, h: 9, color: "#f3e7df" },
-    { id: "apt-2", type: "residential", x: -6, z: 18, w: 10, d: 8, h: 11, color: "#e8f0f0" },
-    { id: "apt-3", type: "residential", x: 58, z: 18, w: 11, d: 9, h: 10, color: "#f1e3d4" },
-    // Grand hotel and offices near the central plaza.
-    { id: "hotel-1", type: "hotel", x: -20, z: 62, w: 18, d: 12, h: 13, color: "#cfe1f0" },
-    { id: "office-tower-1", type: "tower", x: 46, z: 62, w: 16, d: 12, h: 16, color: "#ecf2f7" },
-    { id: "office-tower-2", type: "tower", x: 86, z: 62, w: 14, d: 11, h: 14, color: "#ecf2f7" },
-    { id: "library-1", type: "landmark", x: 12, z: 62, w: 20, d: 14, h: 6, color: "#fff3d6" },
-    // Heavy industry and warehouses near the back lots.
-    { id: "warehouse-1", type: "warehouse", x: -76, z: 90, w: 24, d: 14, h: 5, color: "#f6e2b6" },
-    { id: "warehouse-2", type: "warehouse", x: 52, z: 90, w: 26, d: 16, h: 6, color: "#f6e2b6" },
-    { id: "industry-stack-1", type: "utility", x: 84, z: 92, w: 6, d: 6, h: 14, color: "#c7d1d8" },
-    // Coastal housing and seaside plaza.
-    { id: "coast-house-1", type: "house", x: -88, z: 118, w: 8, d: 7, h: 4, color: "#f6d3c4" },
-    { id: "coast-house-2", type: "house", x: -58, z: 118, w: 8, d: 7, h: 4, color: "#ecf3e8" },
-    { id: "coast-house-3", type: "house", x: -28, z: 118, w: 9, d: 7, h: 5, color: "#f7e6d5" },
-    { id: "coast-house-4", type: "house", x:  2, z: 118, w: 9, d: 7, h: 5, color: "#e9e1f2" },
-    { id: "coast-house-5", type: "house", x:  32, z: 118, w: 8, d: 7, h: 4, color: "#f4e3c4" },
-    { id: "coast-house-6", type: "house", x:  62, z: 118, w: 8, d: 7, h: 4, color: "#ddeaf2" },
-    { id: "mall-1", type: "retail-mall", x: -30, z: 8, w: 40, d: 20, h: 5, color: "#f4e9d8" },
-    { id: "pavilion-1", type: "pavilion", x: 74, z: 8, w: 14, d: 14, h: 7, color: "#f5efe2" },
+  const roads = makeRoads();
+  const sidewalks = makeSidewalks();
+  const crosswalks = makeCrosswalks();
+  const plazas = [
+    { id: "town-hall-plaza", x: 0, z: 34.3, w: 48, d: 10.2 },
+    { id: "hotel-forecourt", x: 0, z: 52.1, w: 26, d: 4.8 }
   ];
-  catalogBuildings.forEach((spec, idx) => {
-    buildings.push(makeBuilding(spec.id, spec.type, spec.x, spec.z, spec.w, spec.d, spec.h, {
-      ...spec, name: spec.id, h: spec.h, w: spec.w, d: spec.d
-    }));
-  });
 
-  // Street-lamp positions (consistent with scene builder) used for props and collision.
+  const buildings = [...makeCatalogBuildings(), ...makeStorefronts()];
+
+  // Street lamps live on sidewalks, never in a traffic lane.
   const lampPositions = [];
-  for (let x = -48; x <= 48; x += 16) {
-    lampPositions.push([x, 11.0]);
-    lampPositions.push([x, 27.8]);
-  }
-  for (let x = -56; x <= 56; x += 28) {
-    lampPositions.push([x, 58.8]);
+  const lampRows = [
+    { z: 13.1, xs: [-64, -44, -24, -4, 16, 36, 56] },
+    { z: 48.0, xs: [-64, -44, -24, -4, 16, 36, 56] },
+    { z: 74.7, xs: [-64, -44, -24, -4, 16, 36, 56] },
+    { z: 120.6, xs: [-64, -44, -24, -4, 16, 36, 56] },
+    { z: 26, xs: [-80.2, 80.2] },
+    { z: 62, xs: [-80.2, 80.2] },
+    { z: 98, xs: [-80.2, 80.2] }
+  ];
+  for (const row of lampRows) {
+    for (const x of row.xs) lampPositions.push([x, row.z]);
   }
   const lamps = lampPositions.map(([x, z], i) => ({
     id: `street-lamp-${i + 1}`,
@@ -146,52 +271,13 @@ export function buildWorldData() {
     z
   }));
 
-  // Collision boxes for every building plus static props (palms + lamps).
-  const collisionBoxes = buildings.map(buildingBox);
-  lamps.forEach((l) => collisionBoxes.push({
-    id: l.id,
-    type: "street-lamp",
-    minX: l.x - 0.26,
-    maxX: l.x + 0.26,
-    minZ: l.z - 0.26,
-    maxZ: l.z + 0.26
-  }));
-
-  const oceanWall = {
-    id: "ocean-wall",
-    type: "ocean-wall",
-    minX: minX - 1,
-    maxX: maxX + 1,
-    minZ: 60,
-    maxZ: 62
-  };
-  collisionBoxes.push(oceanWall);
-
-  // Scenic ocean boundary.
-  const ocean = {
-    id: "ocean",
-    name: "Ocean",
-    minX,
-    maxX,
-    minZ: 60,
-    maxZ,
-    level: 0,
-    waterLevel: 0,
-    wall: { ...oceanWall }
-  };
-
-  // Props: ten palms.
+  // Palms: beach line plus the town-hall plaza. All are clear of roads.
   const palmPositions = [
-    [-55, 5],
-    [-25, 5],
-    [5, 5],
-    [35, 5],
-    [55, 5],
-    [-50, 30],
-    [-20, 30],
-    [10, 30],
-    [40, 30],
-    [50, 55]
+    ...[-94, -80, -66, -52, -38, -24, 32, 46, 60, 74, 86].map((x) => [x, 124.5]),
+    [-20, 31.5],
+    [20, 31.5],
+    [-20, 37],
+    [20, 37]
   ];
   const props = palmPositions.map(([x, z], i) => ({
     id: `palm-${i + 1}`,
@@ -202,94 +288,132 @@ export function buildWorldData() {
     height: 4 + (i % 3),
     radius: 0.6
   }));
-  // Palm prop collision boxes.
+
+  const oceanWall = {
+    id: "ocean-wall",
+    type: "ocean-wall",
+    minX: minX - 1,
+    maxX: maxX + 1,
+    minZ: OCEAN_MIN_Z,
+    maxZ: OCEAN_MIN_Z + 0.6,
+    minY: 0,
+    maxY: 0.6,
+    height: 0.6
+  };
+
+  const collisionBoxes = buildings.map(buildingBox);
+  lamps.forEach((l) => collisionBoxes.push({
+    id: l.id,
+    type: "street-lamp",
+    minX: l.x - 0.2,
+    maxX: l.x + 0.2,
+    minZ: l.z - 0.2,
+    maxZ: l.z + 0.2,
+    minY: 0,
+    maxY: 3.4,
+    height: 3.4
+  }));
   props.forEach((p) => collisionBoxes.push({
     id: p.id,
     type: "palm",
-    minX: p.x - 0.35,
-    maxX: p.x + 0.35,
-    minZ: p.z - 0.35,
-    maxZ: p.z + 0.35
+    minX: p.x - 0.28,
+    maxX: p.x + 0.28,
+    minZ: p.z - 0.28,
+    maxZ: p.z + 0.28,
+    minY: 0,
+    maxY: p.height,
+    height: p.height
   }));
+  collisionBoxes.push(oceanWall);
 
-  // Traffic routes: 3 rectangular loops.
-  const routePointsA = [
-    point(-94, 10),
-    point(94, 10),
-    point(94, 100),
-    point(-94, 100),
-    point(-94, 10)
-  ];
-  const routePointsB = [
-    point(-94, 16),
-    point(94, 16),
-    point(94, 60),
-    point(-94, 60),
-    point(-94, 16)
-  ];
-  const routePointsC = [
-    point(-30, 46),
-    point(70, 46),
-    point(70, 94),
-    point(-30, 94),
-    point(-30, 46)
-  ];
-
-  const routeDefinitions = [
-    { id: "traffic-route-1", points: routePointsA },
-    { id: "traffic-route-2", points: routePointsB },
-    { id: "traffic-route-3", points: routePointsC }
-  ];
-
-  const trafficRoutes = routeDefinitions.map((r) => {
-    const points = r.points.map((p) => ({ x: p.x, z: p.z }));
-    return {
-      id: r.id,
-      name: r.id,
-      points,
-      waypoints: points,
-      path: points
-    };
-  });
-
-  // Two pedestrian loops.
-  const pedPointsA = [
-    point(-90, 12),
-    point(90, 12),
-    point(90, 100),
-    point(-90, 100),
-    point(-90, 12)
-  ];
-  const pedPointsB = [
-    point(-90, 30),
-    point(90, 30),
-    point(90, 86),
-    point(-90, 86),
-    point(-90, 30)
-  ];
-
-  const makePedRoute = (id, points) => {
-    const pts = points.map((p) => ({ x: p.x, z: p.z }));
-    return { id, name: id, points: pts, waypoints: pts, path: pts };
+  const beach = {
+    id: "beach",
+    x: 0,
+    z: (BEACH_MIN_Z + BEACH_MAX_Z) / 2,
+    w: BEACH_WIDTH,
+    d: BEACH_MAX_Z - BEACH_MIN_Z,
+    minX: -BEACH_WIDTH / 2,
+    maxX: BEACH_WIDTH / 2,
+    minZ: BEACH_MIN_Z,
+    maxZ: BEACH_MAX_Z
   };
 
-  const pedRoutes = [
-    makePedRoute("ped-route-1", pedPointsA),
-    makePedRoute("ped-route-2", pedPointsB)
-  ];
+  const ocean = {
+    id: "ocean",
+    name: "Ocean",
+    minX: -160,
+    maxX: 160,
+    minZ: OCEAN_MIN_Z,
+    maxZ: OCEAN_MAX_Z,
+    width: 320,
+    depth: OCEAN_MAX_Z - OCEAN_MIN_Z,
+    level: 0,
+    waterLevel: -0.05,
+    wall: { ...oceanWall }
+  };
 
-  // Cars: 8 parked (non-traffic) + 3 traffic cars appended.
+  const ground = {
+    id: "ground",
+    x: 0,
+    z: (minZ + GROUND_MAX_Z) / 2,
+    w: 220,
+    d: GROUND_MAX_Z - minZ,
+    minZ,
+    maxZ: GROUND_MAX_Z
+  };
+
+  // Traffic routes stay in the lanes: horizontal legs sit inside a road band,
+  // vertical legs sit inside a vertical road band.
+  const routeDefinitions = [
+    {
+      id: "traffic-route-1",
+      points: [point(-73, 9.8), point(73, 9.8), point(73, 114.2), point(-73, 114.2), point(-73, 9.8)]
+    },
+    {
+      id: "traffic-route-2",
+      points: [point(-77.4, 45.8), point(77.4, 45.8), point(77.4, 78.2), point(-77.4, 78.2), point(-77.4, 45.8)]
+    },
+    {
+      id: "traffic-route-3",
+      points: [point(-77.4, 42.4), point(77.4, 42.4), point(77.4, 113.6), point(-77.4, 113.6), point(-77.4, 42.4)]
+    }
+  ];
+  const trafficRoutes = routeDefinitions.map((route) => {
+    const points = route.points.map((p) => ({ x: p.x, z: p.z }));
+    return { id: route.id, name: route.id, points, waypoints: points, path: points };
+  });
+
+  // Pedestrian loops follow the sidewalks around each city block.
+  const pedDefinitions = [
+    {
+      id: "ped-route-1",
+      points: [point(-70.6, 12.6), point(70.6, 12.6), point(70.6, 39.4), point(-70.6, 39.4), point(-70.6, 12.6)]
+    },
+    {
+      id: "ped-route-2",
+      points: [point(-70.6, 48.6), point(70.6, 48.6), point(70.6, 75.4), point(-70.6, 75.4), point(-70.6, 48.6)]
+    },
+    {
+      id: "ped-route-3",
+      points: [point(-70.6, 84.6), point(70.6, 84.6), point(70.6, 111.4), point(-70.6, 111.4), point(-70.6, 84.6)]
+    }
+  ];
+  const pedRoutes = pedDefinitions.map((route) => {
+    const points = route.points.map((p) => ({ x: p.x, z: p.z }));
+    return { id: route.id, name: route.id, points, waypoints: points, path: points };
+  });
+
+  // Parked cars sit in the curb lane of each road. Variants rotate by index.
   const parkedPositions = [
-    [-90, 6.3, Math.PI / 2],
-    [-30, 6.3, Math.PI / 2],
-    [30, 6.3, Math.PI / 2],
-    [90, 6.3, Math.PI / 2],
-    [-70, 32.3, -Math.PI / 2],
-    [-10, 32.3, -Math.PI / 2],
-    [50, 32.3, -Math.PI / 2],
-    [90, 80.3, -Math.PI / 2]
+    [-90, 10.2, Math.PI / 2, "sport"],
+    [90, 10.2, -Math.PI / 2, "suv"],
+    [-56, 45.8, Math.PI / 2, "compact"],
+    [56, 45.8, -Math.PI / 2, "pickup"],
+    [-90, 77.8, Math.PI / 2, "suv"],
+    [90, 77.8, -Math.PI / 2, "sport"],
+    [-30, 113.8, Math.PI / 2, "compact"],
+    [30, 113.8, -Math.PI / 2, "pickup"]
   ];
-
   const carColors = ["#d64045", "#3b7ddd", "#f2c14e", "#7a9e7e", "#9b5de5", "#f77f00", "#4cc9f0", "#90be6d"];
 
   const parkedCars = parkedPositions.map(([x, z, yaw, variant], i) => ({
@@ -297,9 +421,9 @@ export function buildWorldData() {
     type: "car",
     x,
     z,
-    yaw: yaw || 0,
-    heading: yaw || 0,
-    variant: variant || ["sport","suv","compact","pickup"][(i) % 4],
+    yaw,
+    heading: yaw,
+    variant,
     color: carColors[i % carColors.length],
     traffic: false,
     parked: true,
@@ -307,13 +431,12 @@ export function buildWorldData() {
     enterable: true
   }));
 
-  // Append traffic cars as entries with traffic:true and route metadata.
   trafficRoutes.forEach((route, i) => {
     const start = route.points[0] || { x: 0, z: 0 };
     parkedCars.push({
       id: `traffic-car-${i + 1}`,
       type: "car",
-      variant: ["sport","suv","compact","pickup"][(parkedPositions.length + i) % 4],
+      variant: ["sport", "suv", "compact", "pickup"][(parkedPositions.length + i) % 4],
       x: start.x,
       z: start.z,
       yaw: 0,
@@ -323,18 +446,16 @@ export function buildWorldData() {
       parked: false,
       stealable: false,
       enterable: false,
-      // Route metadata (multiple aliases for consumers).
       routeId: route.id,
       routeIndex: i,
-      route: route,
+      route,
       routePoints: route.points,
       waypoints: route.points,
       routeProgress: 0
     });
   });
 
-  const playerSpawn = { x: 0, z: 36, y: 0, yaw: 0 };
-
+  const playerSpawn = { x: 0, z: 36.5, y: 0, yaw: 0 };
   const spawns = {
     player: playerSpawn,
     playerStart: playerSpawn,
@@ -355,11 +476,18 @@ export function buildWorldData() {
 
   return {
     bounds,
+    roads,
+    sidewalks,
+    crosswalks,
+    plazas,
+    beach,
+    ocean,
+    ground,
     collisionBoxes,
     buildings,
     props,
+    palms: props,
     lamps,
-    ocean,
     spawns,
     trafficRoutes,
     pedRoutes,

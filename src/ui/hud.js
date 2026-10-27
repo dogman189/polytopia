@@ -17,7 +17,7 @@ const CONTROL_GUIDE = [
   "Mouse drag camera",
   "Shift sprint (on foot)",
   "E enter / exit vehicle",
-  "W throttle · S brake · A/D steer (driving)"
+  "W throttle · S brake/reverse · A/D steer (driving)"
 ].join("  ·  ");
 
 export function updateHUD(mode = "onFoot", prompt = "", speed = 0) {

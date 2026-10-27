@@ -25,6 +25,7 @@ export function makeTexture(kind, size = 64) {
     glass:  ["#3f6a88", "#3b6280", "#446f90"],
     stone:  ["#b2afa8", "#a7a39c", "#9b978f"],
     pavement: ["#e8b0a8", "#e3a79e", "#d99a93"],
+    metal:  ["#9aa4ab", "#8b969e", "#aab4ba"],
     generic:["#d3d3d3", "#c5c5c5", "#b9b9b9"]
   };
 
@@ -110,6 +111,14 @@ export function makeTexture(kind, size = 64) {
       ctx.fillRect((rng() * size) | 0, (rng() * size) | 0, 1, 1);
     }
     ctx.globalAlpha = 1;
+  } else if (kind === "metal") {
+    // Corrugated warehouse cladding.
+    ctx.globalAlpha = 0.35;
+    for (let x = 0; x < size; x += 6) {
+      ctx.fillStyle = x % 12 === 0 ? "#c2cbd1" : "#727e86";
+      ctx.fillRect(x, 0, 2, size);
+    }
+    ctx.globalAlpha = 1;
   }
 
   const texture = new THREE.CanvasTexture(canvas);
@@ -189,4 +198,148 @@ export function makeRoadTextureVertical(size = 256) {
   texture.anisotropy = 8;
   return texture;
 }
+// Framed window pane: bright glass with mullions and a pale sill so windows
+// read as windows instead of black holes.
+export function makeWindowTexture(size = 64) {
+  if (typeof document === "undefined") return null;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+
+  const frame = Math.max(3, Math.round(size * 0.09));
+  ctx.fillStyle = "#f3eee0";
+  ctx.fillRect(0, 0, size, size);
+
+  const glass = ctx.createLinearGradient(0, frame, 0, size - frame);
+  glass.addColorStop(0, "#8fc2d8");
+  glass.addColorStop(0.45, "#4f7f9c");
+  glass.addColorStop(1, "#2c4d66");
+  ctx.fillStyle = glass;
+  ctx.fillRect(frame, frame, size - frame * 2, size - frame * 2);
+
+  // Pale cross mullions.
+  ctx.fillStyle = "#f3eee0";
+  ctx.fillRect(Math.round(size / 2) - 1, frame, 2, size - frame * 2);
+  ctx.fillRect(frame, Math.round(size * 0.46), size - frame * 2, 2);
+
+  // Diagonal reflection streaks.
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(frame, frame, size - frame * 2, size - frame * 2);
+  ctx.clip();
+  ctx.globalAlpha = 0.28;
+  ctx.fillStyle = "#eaf7ff";
+  ctx.beginPath();
+  ctx.moveTo(frame, size * 0.22);
+  ctx.lineTo(size * 0.56, frame);
+  ctx.lineTo(size * 0.86, frame);
+  ctx.lineTo(frame, size * 0.64);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+
+  // Sill.
+  ctx.fillStyle = "#d8cfbc";
+  ctx.fillRect(0, size - Math.max(4, Math.round(size * 0.09)), size, Math.max(4, Math.round(size * 0.09)));
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.magFilter = THREE.NearestFilter;
+  texture.minFilter = THREE.NearestMipmapLinearFilter;
+  texture.anisotropy = 8;
+  return texture;
+}
+
+// Paneled door with a brass handle.
+export function makeDoorTexture(size = 64) {
+  if (typeof document === "undefined") return null;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+
+  ctx.fillStyle = "#f1eadc";
+  ctx.fillRect(0, 0, size, size);
+
+  const inset = Math.round(size * 0.12);
+  ctx.fillStyle = "#6b4a32";
+  ctx.fillRect(inset, inset, size - inset * 2, size - inset);
+  ctx.fillStyle = "#7c583c";
+  ctx.fillRect(inset + 4, inset + 4, size - inset * 2 - 8, size - inset * 2 - 6);
+
+  ctx.strokeStyle = "#4a3221";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(inset + 9, inset + 9, size - inset * 2 - 18, size * 0.28);
+  ctx.strokeRect(inset + 9, size * 0.56, size - inset * 2 - 18, size * 0.22);
+
+  ctx.fillStyle = "#d8b56a";
+  ctx.beginPath();
+  ctx.arc(size - inset - 8, size * 0.58, 3, 0, Math.PI * 2);
+  ctx.fill();
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.magFilter = THREE.NearestFilter;
+  texture.minFilter = THREE.NearestMipmapLinearFilter;
+  texture.anisotropy = 8;
+  return texture;
+}
+
+// Glass curtain wall for office towers: a repeating 4x4 window grid.
+export function makeCurtainWallTexture(size = 128) {
+  if (typeof document === "undefined") return null;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+
+  let seed = 73;
+  const rng = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+
+  ctx.fillStyle = "#d9e0e5";
+  ctx.fillRect(0, 0, size, size);
+
+  const cells = 4;
+  const cell = size / cells;
+  const gap = Math.max(2, Math.round(cell * 0.1));
+  for (let y = 0; y < cells; y += 1) {
+    for (let x = 0; x < cells; x += 1) {
+      const lit = rng() > 0.86;
+      const glass = ctx.createLinearGradient(0, y * cell, 0, (y + 1) * cell);
+      if (lit) {
+        glass.addColorStop(0, "#ffe9ac");
+        glass.addColorStop(1, "#c99a55");
+      } else {
+        glass.addColorStop(0, "#8bbcd4");
+        glass.addColorStop(0.55, "#4f7e9c");
+        glass.addColorStop(1, "#2f5570");
+      }
+      ctx.fillStyle = glass;
+      ctx.fillRect(x * cell + gap, y * cell + gap, cell - gap * 2, cell - gap * 2);
+      ctx.globalAlpha = 0.18;
+      ctx.fillStyle = "#eef9ff";
+      ctx.beginPath();
+      ctx.moveTo(x * cell + gap, y * cell + cell * 0.55);
+      ctx.lineTo(x * cell + cell * 0.55, y * cell + gap);
+      ctx.lineTo(x * cell + cell * 0.9, y * cell + gap);
+      ctx.lineTo(x * cell + gap, y * cell + cell * 0.9);
+      ctx.closePath();
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.magFilter = THREE.NearestFilter;
+  texture.minFilter = THREE.NearestMipmapLinearFilter;
+  texture.anisotropy = 8;
+  return texture;
+}
+
 export default makeTexture;

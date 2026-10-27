@@ -15,6 +15,62 @@ function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 
+function rayBoxEntry(origin, direction, box) {
+  const minY = Number.isFinite(box.minY) ? box.minY : 0;
+  const maxY = Number.isFinite(box.maxY) ? box.maxY : (Number.isFinite(box.height) ? box.height : Infinity);
+  let tMin = 0;
+  let tMax = 1;
+  const axes = [
+    ["x", box.minX, box.maxX],
+    ["y", minY, maxY],
+    ["z", box.minZ, box.maxZ]
+  ];
+  for (const [axis, min, max] of axes) {
+    if (!Number.isFinite(min) || !Number.isFinite(max)) continue;
+    const originValue = origin[axis];
+    const directionValue = direction[axis];
+    if (Math.abs(directionValue) < 1e-8) {
+      if (originValue < min || originValue > max) return null;
+      continue;
+    }
+    let t1 = (min - originValue) / directionValue;
+    let t2 = (max - originValue) / directionValue;
+    if (t1 > t2) [t1, t2] = [t2, t1];
+    tMin = Math.max(tMin, t1);
+    tMax = Math.min(tMax, t2);
+    if (tMin > tMax) return null;
+  }
+  return tMin;
+}
+
+function pullCameraIn(targetEye, cameraPosition, obstacles, minDistance, padding) {
+  if (!Array.isArray(obstacles) || obstacles.length === 0) return cameraPosition;
+  const direction = {
+    x: cameraPosition.x - targetEye.x,
+    y: cameraPosition.y - targetEye.y,
+    z: cameraPosition.z - targetEye.z
+  };
+  const length = Math.hypot(direction.x, direction.y, direction.z);
+  if (length < 1e-5) return cameraPosition;
+
+  let maxT = 1;
+  for (const box of obstacles) {
+    if (!box || box.type === "pedestrian") continue;
+    const entry = rayBoxEntry(targetEye, direction, box);
+    if (entry !== null && entry > 0.001 && entry < maxT) maxT = entry;
+  }
+  if (maxT >= 1) return cameraPosition;
+
+  const allowed = Math.max(minDistance, maxT * length - padding);
+  const scale = allowed / length;
+  return {
+    x: targetEye.x + direction.x * scale,
+    y: Math.max(0.5, targetEye.y + direction.y * scale),
+    z: targetEye.z + direction.z * scale
+  };
+}
+
+
 function targetXYZ(target) {
   if (!target || typeof target !== "object") {
     return { x: 0, y: 0, z: 0 };
@@ -71,6 +127,9 @@ export function updateFollowCamera(camera, target, mouseState, dt, options = {})
   const lookHeight = num(opts.lookHeight, 1.2);
   const followSpeed = Math.max(0.01, num(opts.followSpeed, 6));
   const shoulder = num(opts.shoulder, -0.55);
+  const obstacles = Array.isArray(opts.obstacles) ? opts.obstacles : [];
+  const minDistance = Math.max(0.8, num(opts.minDistance, 1.5));
+  const collisionPadding = Math.max(0, num(opts.collisionPadding, 0.35));
 
   const cosPitch = Math.cos(pitch);
   const sinPitch = Math.sin(pitch);
@@ -80,22 +139,33 @@ export function updateFollowCamera(camera, target, mouseState, dt, options = {})
   // small lateral offset for an over-the-shoulder framing.
   const rightX = Math.cos(yaw);
   const rightZ = -Math.sin(yaw);
+  const targetEye = { x: t.x, y: t.y + lookHeight, z: t.z };
   const desired = {
     x: t.x - Math.sin(yaw) * horizontal + rightX * shoulder,
     y: t.y + height + distance * sinPitch,
     z: t.z - Math.cos(yaw) * horizontal + rightZ * shoulder
   };
+  const resolved = pullCameraIn(targetEye, desired, obstacles, minDistance, collisionPadding);
 
   if (safeDt > 0) {
     const alpha = 1 - Math.exp(-followSpeed * safeDt);
-    camera.position.x += (desired.x - camera.position.x) * alpha;
-    camera.position.y += (desired.y - camera.position.y) * alpha;
-    camera.position.z += (desired.z - camera.position.z) * alpha;
+    camera.position.x += (resolved.x - camera.position.x) * alpha;
+    camera.position.y += (resolved.y - camera.position.y) * alpha;
+    camera.position.z += (resolved.z - camera.position.z) * alpha;
   } else {
-    camera.position.x = desired.x;
-    camera.position.y = desired.y;
-    camera.position.z = desired.z;
+    camera.position.x = resolved.x;
+    camera.position.y = resolved.y;
+    camera.position.z = resolved.z;
   }
+
+  // Never let smoothing carry the camera through a wall.
+  const clamped = pullCameraIn(targetEye, camera.position, obstacles, minDistance, collisionPadding);
+  if (clamped !== camera.position) {
+    camera.position.x = clamped.x;
+    camera.position.y = clamped.y;
+    camera.position.z = clamped.z;
+  }
+  if (camera.position.y < 0.5) camera.position.y = 0.5;
 
   if (camera.userData && typeof camera.userData === "object") {
     camera.userData.cameraYaw = yaw;
